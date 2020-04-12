@@ -1,31 +1,36 @@
-# youtube-quality
-A userscript for MPV that allows you to change youtube video quality (ytdl-format) on the fly, as though you were using the web player.
+# youtube-upnext
+A userscript for MPV that allows you to load the up next/recommened youtube video on the fly, as though you were using the web player.
 
-![screenshot](quality-menu.png)
+![screenshot](upnext-menu.png)
 
-Toggle the menu with ctrl+f (configurable).   Select from the list with the arrow keys (configurable), and press enter (configurable) to select.  Menu times out after 10 seconds (configurable.)
+Toggle the menu with ctrl+u (configurable). Select from the list with the arrow keys (configurable), and press enter (configurable) to select. Menu times out after 10 seconds (configurable.)
 
 ## Installation
-Copy youtube-quality.lua into your scripts directory, e.g.:
 
-    cp youtube-quality.lua ~/.config/mpv/scripts/
+Copy youtube-upnext.lua into your scripts directory, e.g.:
+
+    cp youtube-upnext.lua ~/.config/mpv/scripts/
+
 optional, copy the config file:
 
-    cp youtube-quality.conf ~/.config/mpv/script-opts/
+    cp youtube-upnext.conf ~/.config/mpv/script-opts/
 
+### Windows:
 
-## OSC extension
-**Completely optional**, an extended version of the OSC is available that includes a button to display the quality menu.  To use this, copy the youtube-quality-osc.lua file into your scripts directory and put `osc=no` in your mpv.conf.
+Make sure you have GNU Wget installed.
+There are several websites that offer a binary release of wget for Windows e.g. [here](https://eternallybored.org/misc/wget/).
 
-**PLEASE NOTE:** This conflicts with other scripts that modify the OSC, such as TheAMM's excellent [mpv_thumbnail_script](https://github.com/TheAMM/mpv_thumbnail_script).  Merging this OSC modification with that script or others is certainly possible, *but is left as an exercise for the user...*
+If you downloaded/installed the wget executable, you also have to [add the directory of the wget.exe toyour machine's
+%PATH](https://stackoverflow.com/a/41895179/10367381)
 
-## Plans For Future Enhancement
-- [x] Visual indication of what the current quality level is.
-- [x] Option to populate the quality list automatically with the exact formats available for a given video.
-- [x] Optional OSC extension.
-- [ ] *\[your suggestion here\]*
+Depending on your setup you may have to set `check_certificate = false` in the lua script or in the config file,
+because some wget versions on Windows seem to have problems with HTTPS/SSL certificates.
+
 
 ## Credit
+- I pretty much copied the [mpv-youtube-quality](https://github.com/jgreco/mpv-youtube-quality) script and added wget
+
+## [youtube-quality](https://github.com/jgreco/mpv-youtube-quality)'s Credit
 - [reload.lua](https://github.com/4e6/mpv-reload/), for the function to reload a video while preserving the playlist.
 - [mpv-playlistmanager](https://github.com/jonniek/mpv-playlistmanager), from which I ripped off much of the menu formatting config.
 - ytdl_hook.lua, from which I ripped off much of the youtube-dl code to fetch the format list
