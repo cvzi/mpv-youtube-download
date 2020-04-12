@@ -17,15 +17,17 @@ optional, copy the config file:
 
 ### Windows:
 
-Make sure you have GNU Wget installed.
-There are several websites that offer a binary release of wget for Windows e.g. [here](https://eternallybored.org/misc/wget/).
+The location of the scripts directory on Windows is `%APPDATA%\mpv\scripts` e.g. `C:\Users\cvzi\AppData\Roaming\mpv\scripts`
 
-If you downloaded/installed the wget executable, you also have to [add the directory of the wget.exe toyour machine's
-%PATH](https://stackoverflow.com/a/41895179/10367381)
+Make sure you have GNU Wget installed.
+There are several websites that offer a binary release of wget for Windows e.g. [here](https://eternallybored.org/misc/wget/),
+it is also included in [MingW](mingw.org) and similar tools.
+
+If you downloaded/installed the wget executable, you have to [add the directory of the wget.exe toyour machine's
+%PATH](https://stackoverflow.com/a/41895179/10367381).
 
 Depending on your setup you may have to set `check_certificate = false` in the lua script or in the config file,
 because some wget versions on Windows seem to have problems with HTTPS/SSL certificates.
-
 
 ## Credit
 - I pretty much copied the [mpv-youtube-quality](https://github.com/jgreco/mpv-youtube-quality) script and added wget
