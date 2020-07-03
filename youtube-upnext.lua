@@ -198,14 +198,30 @@ function download_upnext(url)
     end
 
     local pos1 = string.find(s, "watchNextEndScreenRenderer", 1, true)
-    local pos2 = string.find(s, "}}}],\\\"", pos1 + 1, true)
-    if pos1 == nil or pos2 == nil then
-        mp.osd_message("upnext failed, no upnext data found", 10)
-        msg.error("failed to get upnext data: pos1=" .. tostring(pos1) .. " pos2=" ..tostring(pos2))
+    if pos1 == nil then
+        mp.osd_message("upnext failed, no upnext data found err01", 10)
+        msg.error("failed to find json position 01: pos1=nil")
+        return "{}"
     end
-    s = string.sub(s, pos1, pos2)
 
-    return "{\"" .. string.gsub(s, "\\\"", "\"") .. "}}]}}"
+    local pos2 = string.find(s, "}}}],\\\"", pos1 + 1, true)
+    if pos2 ~= nil then
+        s = string.sub(s, pos1, pos2)
+        return "{\"" .. string.gsub(s, "\\\"", "\"") .. "}}]}}"
+    end
+
+    msg.verbose("failed to find json position 2: Trying alternative")
+    pos2 = string.find(s, "}}}]}}", pos1 + 1, true)
+
+    if pos2 ~= nil then
+        msg.verbose("Alternative found!")
+        s = string.sub(s, pos1, pos2)
+        return "{\"" .. string.gsub(s, "\\\"", "\"") .. "}}]}}]}}"
+    end
+
+    mp.osd_message("upnext failed, no upnext data found err03", 10)
+    msg.error("failed to get upnext data: pos1=" .. tostring(pos1) .. " pos2=" ..tostring(pos2))
+    return "{}"
 end
 
 function parse_upnext(json_str, url)
