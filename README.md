@@ -21,7 +21,7 @@ The location of the scripts directory on Windows is `%APPDATA%\mpv\scripts` e.g.
 
 Make sure you have GNU Wget installed.
 There are several websites that offer a binary release of wget for Windows e.g. [here](https://eternallybored.org/misc/wget/),
-it is also included in [MingW](mingw.org) and similar tools.
+it is also included in [MingW](http://mingw.org/) and similar tools.
 
 If you downloaded/installed the wget executable, you have to [add the directory of the wget.exe toyour machine's
 %PATH](https://stackoverflow.com/a/41895179/10367381).
