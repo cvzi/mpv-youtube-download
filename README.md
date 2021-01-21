@@ -1,36 +1,27 @@
-# youtube-upnext
-A userscript for MPV that allows you to load the up next/recommened youtube video on the fly, as though you were using the web player.
+# youtube-download
+A userscript for MPV that allows you to download the current youtube video/audio with one key press.
 
-![screenshot](upnext-menu.png)
-
-Toggle the menu with ctrl+u (configurable). Select from the list with the arrow keys (configurable), and press enter (configurable) to select. Menu times out after 10 seconds (configurable.)
+Start a video download with ctrl+d (configurable) or start an audio download with ctrl+a (configurable).
 
 ## Installation
 
-Copy youtube-upnext.lua into your scripts directory, e.g.:
+Copy youtube-download.lua into your scripts directory, e.g.:
 
-    cp youtube-upnext.lua ~/.config/mpv/scripts/
+    cp youtube-download.lua ~/.config/mpv/scripts/
 
 optional, copy the config file:
 
-    cp youtube-upnext.conf ~/.config/mpv/script-opts/
+    cp youtube-download.conf ~/.config/mpv/script-opts/
 
 ### Windows:
 
 The location of the scripts directory on Windows is `%APPDATA%\mpv\scripts` e.g. `C:\Users\cvzi\AppData\Roaming\mpv\scripts`
 
-Make sure you have GNU Wget installed.
-There are several websites that offer a binary release of wget for Windows e.g. [here](https://eternallybored.org/misc/wget/),
-it is also included in [MingW](http://mingw.org/) and similar tools.
-
-If you downloaded/installed the wget executable, you have to [add the directory of the wget.exe toyour machine's
-%PATH](https://stackoverflow.com/a/41895179/10367381).
-
-Depending on your setup you may have to set `check_certificate = false` in the lua script or in the config file,
-because some wget versions on Windows seem to have problems with HTTPS/SSL certificates.
+Make sure you have either ffmpeg or avconv installed. On windows, you need to [add the directory of the ffmpeg.exe to
+your machine's %PATH](https://stackoverflow.com/a/41895179/10367381) or put the executable in the same directory as the youtube-dl.exe.
 
 ## Credit
-- I pretty much copied the [mpv-youtube-quality](https://github.com/jgreco/mpv-youtube-quality) script and added wget
+- I pretty much copied the [mpv-youtube-quality](https://github.com/jgreco/mpv-youtube-quality) script
 
 ## [youtube-quality](https://github.com/jgreco/mpv-youtube-quality)'s Credit
 - [reload.lua](https://github.com/4e6/mpv-reload/), for the function to reload a video while preserving the playlist.
