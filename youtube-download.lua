@@ -14,29 +14,35 @@ local utils = require 'mp.utils'
 local msg = require 'mp.msg'
 
 local opts = {
-    --key bindings
+    -- Key bindings
+    -- Set to empty string "" to disable
     download_video_binding = "ctrl+d",
     download_audio_binding = "ctrl+a",
 
-    --Specify audio format: "best", "aac","flac", "mp3", "m4a", "opus", "vorbis", or "wav"
+    -- Specify audio format: "best", "aac","flac", "mp3", "m4a", "opus", "vorbis", or "wav"
     audio_format = "mp3",
 
-    --Specify ffmpeg/avconv audio quality
-    --insert a value between 0 (better) and 9 (worse) for VBR or a specific bitrate like 128K
+    -- Specify ffmpeg/avconv audio quality
+    -- insert a value between 0 (better) and 9 (worse) for VBR or a specific bitrate like 128K
     audio_quality = "0",
 
-    --Same as youtube-dl --format FORMAT
-    --see https://github.com/ytdl-org/youtube-dl/blob/master/README.md#format-selection
+    -- Same as youtube-dl --format FORMAT
+    -- see https://github.com/ytdl-org/youtube-dl/blob/master/README.md#format-selection
     video_format = "",
 
-    --Encode the video to another format if necessary (currently supported: mp4|flv|ogg|webm|mkv|avi)
+    -- Encode the video to another format if necessary: "mp4", "flv", "ogg", "webm", "mkv", "avi"
     recode_video = "",
 
     -- Restrict filenames to only ASCII characters, and avoid "&" and spaces in filenames
     restrict_filenames = true,
 
-    --Same youtube-dl -o
-    --see https://github.com/ytdl-org/youtube-dl/blob/master/README.md#output-template
+    -- Filename or full path
+    -- Same as youtube-dl -o FILETEMPLATE
+    -- see https://github.com/ytdl-org/youtube-dl/blob/master/README.md#output-template
+    -- A relative path or a file name is relative to the path mpv was launched from
+    -- On Windows you need to use a double blackslash or a single fordwardslash
+    -- For example "C:\\Users\\Username\\Downloads\\%(title)s.%(ext)s"
+    -- Or "C:/Users/Username/Downloads/%(title)s.%(ext)s"
     filename = "%(title)s.%(ext)s"
 }
 
@@ -143,21 +149,30 @@ local function download(audio_only)
     end
 
     if filename then
-        local filepath = path_join(utils.getcwd(), filename)
+        local filepath
+        local basepath
+        if filename:find("/") == nil and filename:find("\\") == nil then
+          basepath = utils.getcwd()
+          filepath = path_join(utils.getcwd(), filename)
+        else
+          basepath = ""
+          filepath = filename
+        end
+
         local osd_text
         local ass0 = mp.get_property("osd-ass-cc/0")
         local ass1 =  mp.get_property("osd-ass-cc/1")
-        if filepath:len() > 100 then
+        if filepath:len() < 100 then
             osd_text = ass0 .. "{\\fs12} " .. filepath .. " {\\fs20}" .. ass1
-            mp.osd_message("Download succeeded\n" .. osd_text, 5)
+        elseif basepath == "" then
+            osd_text = ass0 .. "{\\fs8} " .. filepath .. " {\\fs20}" .. ass1
         else
-            osd_text = ass0 .. "{\\fs11} " .. utils.getcwd() .. "\n" .. filename .. " {\\fs20}" ..  ass1
+            osd_text = ass0 .. "{\\fs11} " .. basepath .. "\n" .. filename .. " {\\fs20}" ..  ass1
         end
         mp.osd_message("Download succeeded\n" .. osd_text, 5)
     else
         mp.osd_message("Download succeeded\n" .. utils.getcwd(), 5)
     end
-    return
 end
 
 local function download_video()
@@ -169,5 +184,9 @@ local function download_audio()
 end
 
 -- keybind
-mp.add_key_binding(opts.download_video_binding, "download-video", download_video)
-mp.add_key_binding(opts.download_audio_binding, "download-audio", download_audio)
+if opts.download_video_binding and opts.download_video_binding ~= "" then
+    mp.add_key_binding(opts.download_video_binding, "download-video", download_video)
+end
+if opts.download_audio_binding and opts.download_audio_binding ~= "" then
+    mp.add_key_binding(opts.download_audio_binding, "download-audio", download_audio)
+end
