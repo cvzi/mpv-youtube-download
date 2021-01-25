@@ -36,6 +36,18 @@ local opts = {
     -- Restrict filenames to only ASCII characters, and avoid "&" and spaces in filenames
     restrict_filenames = true,
 
+    -- Download the whole playlist (false) or only one video (true)
+    -- Same as youtube-dl --no-playlist
+    no_playlist = true,
+
+    -- Use an archive file, see youtube-dl --download-archive
+    -- You have these options:
+    --  * Set to empty string "" to not use an archive file
+    --  * Set an absolute path to use one archive for all downloads e.g. download_archive="/home/user/archive.txt"
+    --  * Set a relative path/only a filename to use one archive per directory e.g. download_archive="archive.txt"
+    --  * Use $PLAYLIST to create one archive per playlist e.g. download_archive="/home/user/archives/$PLAYLIST.txt"
+    download_archive = "",
+
     -- Filename or full path
     -- Same as youtube-dl -o FILETEMPLATE
     -- see https://github.com/ytdl-org/youtube-dl/blob/master/README.md#output-template
@@ -68,8 +80,15 @@ local function path_join(...)
     return table.concat({...}, path_separator())
 end
 
-
+local is_downloading = false
 local function download(audio_only)
+    msg.error("download()")
+    if is_downloading then
+        return
+    end
+    is_downloading = true
+    msg.error("download() aquired")
+
     local url = mp.get_property("path")
 
     url = string.gsub(url, "ytdl://", "") -- Strip possible ytdl:// prefix.
@@ -80,7 +99,14 @@ local function download(audio_only)
     and string.find(url, "//www.youtube.com/") == nil
     then
         mp.osd_message("Not a youtube URL: " .. tostring(url), 10)
+        is_downloading = false
         return
+    end
+
+    local list_match = url:match("list=(%w+)")
+    local download_archive = opts.download_archive
+    if list_match ~= nil and opts.download_archive ~= nil and opts.download_archive:find("$PLAYLIST", 1, true) then
+        download_archive = opts.download_archive:gsub("$PLAYLIST", list_match)
     end
 
     if audio_only then
@@ -97,6 +123,13 @@ local function download(audio_only)
     if opts.filename and opts.filename ~= "" then
         table.insert(command, "-o")
         table.insert(command, opts.filename)
+    end
+    if opts.no_playlist then
+        table.insert(command, "--no-playlist")
+    end
+    if download_archive and download_archive ~= "" then
+        table.insert(command, "--download-archive")
+        table.insert(command, download_archive)
     end
     if audio_only then
         table.insert(command, "--extract-audio")
@@ -123,6 +156,8 @@ local function download(audio_only)
     -- Start download
     local status, stdout, stderr = exec(command, true, true)
 
+    is_downloading = false
+
     if (status ~= 0) then
         mp.osd_message("download failed:\n" .. tostring(stderr), 10)
         msg.error("URL: " .. tostring(url))
@@ -132,6 +167,12 @@ local function download(audio_only)
         return
     end
 
+    if string.find(stdout, "has already been recorded in archive") ~=nil then
+        mp.osd_message("Has already been recorded in archive", 5)
+        return
+    end
+
+
     -- Retrieve the file name
     local filename = nil
     if stdout then
@@ -140,9 +181,10 @@ local function download(audio_only)
             last_i, start_index = i, j
             i, j = stdout:find ("Destination: ",j, true)
         end
+
         if last_i ~= nil then
           local end_index = stdout:find ("\n", start_index, true)
-          if end_index ~= nil then
+          if end_index ~= nil and start_index ~= nil then
             filename = stdout:sub(start_index, end_index):gsub("^%s+", ""):gsub("%s+$", "")
            end
         end
