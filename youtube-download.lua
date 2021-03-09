@@ -48,6 +48,13 @@ local opts = {
     --  * Use $PLAYLIST to create one archive per playlist e.g. download_archive="/home/user/archives/$PLAYLIST.txt"
     download_archive = "",
 
+    -- Use a cookies file for youtube-dl
+    -- Same as youtube-dl --cookies
+    -- On Windows you need to use a double blackslash or a single fordwardslash
+    -- For example "C:\\Users\\Username\\cookies.txt"
+    -- Or "C:/Users/Username/cookies.txt"
+    cookies = "",
+
     -- Filename or full path
     -- Same as youtube-dl -o FILETEMPLATE
     -- see https://github.com/ytdl-org/youtube-dl/blob/master/README.md#output-template
@@ -82,12 +89,12 @@ end
 
 local is_downloading = false
 local function download(audio_only)
-    msg.error("download()")
+    msg.verbose("download()")
     if is_downloading then
         return
     end
     is_downloading = true
-    msg.error("download() aquired")
+    msg.verbose("download() aquired")
 
     local url = mp.get_property("path")
 
@@ -151,6 +158,10 @@ local function download(audio_only)
           table.insert(command, opts.recode_video)
         end
     end
+    if opts.cookies and opts.cookies  ~= "" and opts.cookies:gsub("^%s+", ""):gsub("%s+$", "") ~= "" then
+        table.insert(command, "--cookies")
+        table.insert(command, opts.cookies)
+    end
     table.insert(command, url)
 
     -- Start download
@@ -162,8 +173,8 @@ local function download(audio_only)
         mp.osd_message("download failed:\n" .. tostring(stderr), 10)
         msg.error("URL: " .. tostring(url))
         msg.error("Return status code: " .. tostring(status))
-        msg.error(tostring(stderr))
-        msg.error(tostring(stdout))
+        msg.verbose(tostring(stderr))
+        msg.verbose(tostring(stdout))
         return
     end
 
