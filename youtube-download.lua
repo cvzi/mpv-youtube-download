@@ -18,6 +18,8 @@ local opts = {
     -- Set to empty string "" to disable
     download_video_binding = "ctrl+d",
     download_audio_binding = "ctrl+a",
+    download_subtitle_binding = "ctrl+s",
+    download_video_embed_subtitle_binding = "ctrl+i",
 
     -- Specify audio format: "best", "aac","flac", "mp3", "m4a", "opus", "vorbis", or "wav"
     audio_format = "mp3",
@@ -62,7 +64,16 @@ local opts = {
     -- On Windows you need to use a double blackslash or a single fordwardslash
     -- For example "C:\\Users\\Username\\Downloads\\%(title)s.%(ext)s"
     -- Or "C:/Users/Username/Downloads/%(title)s.%(ext)s"
-    filename = "%(title)s.%(ext)s"
+    filename = "%(title)s.%(ext)s",
+
+    -- Subtitle language
+    -- Same as youtube-dl --sub-lang en
+    sub_lang = "en",
+
+    -- Subtitle format
+    -- Same as youtube-dl --sub-format best
+    sub_format = "best"
+
 }
 
 --Read configuration file
@@ -76,6 +87,7 @@ if ytdl_raw_options ~= nil and ytdl_raw_options:find("cookies=") ~= nil then
         opts.cookies = cookie_file
     end
 end
+
 
 local function exec(args, capture_stdout, capture_stderr)
     local ret = mp.command_native({
@@ -96,8 +108,15 @@ local function path_join(...)
     return table.concat({...}, path_separator())
 end
 
+local DOWNLOAD = {
+    VIDEO=1,
+    AUDIO=2,
+    SUBTITLE=3,
+    VIDEO_EMBED_SUBTITLE=4
+}
+
 local is_downloading = false
-local function download(audio_only)
+local function download(download_type)
     msg.verbose("download()")
     if is_downloading then
         return
@@ -125,8 +144,12 @@ local function download(audio_only)
         download_archive = opts.download_archive:gsub("$PLAYLIST", list_match)
     end
 
-    if audio_only then
+    if download_type == DOWNLOAD.AUDIO then
         mp.osd_message("Audio download started", 2)
+    elseif download_type == DOWNLOAD.SUBTITLE then
+        mp.osd_message("Subtitle download started", 2)
+    elseif download_type == DOWNLOAD.VIDEO_EMBED_SUBTITLE then
+        mp.osd_message("Video w/ subtitle download started", 2)
     else
         mp.osd_message("Video download started", 2)
     end
@@ -147,7 +170,17 @@ local function download(audio_only)
         table.insert(command, "--download-archive")
         table.insert(command, download_archive)
     end
-    if audio_only then
+
+    if download_type == DOWNLOAD.SUBTITLE then
+        table.insert(command, "--sub-lang")
+        table.insert(command, opts.sub_lang)
+        table.insert(command, "--write-sub")
+        table.insert(command, "--skip-download")
+        if opts.sub_format and opts.sub_format  ~= "" then
+            table.insert(command, "--sub-format")
+            table.insert(command, opts.sub_format)
+        end
+    elseif download_type == DOWNLOAD.AUDIO then
         table.insert(command, "--extract-audio")
         if opts.audio_format and opts.audio_format  ~= "" then
           table.insert(command, "--audio-format")
@@ -157,7 +190,16 @@ local function download(audio_only)
           table.insert(command, "--audio-quality")
           table.insert(command, opts.audio_quality)
         end
-    else
+    else --DOWNLOAD.VIDEO or DOWNLOAD.VIDEO_EMBED_SUBTITLE
+        if download_type == DOWNLOAD.VIDEO_EMBED_SUBTITLE then
+            table.insert(command, "--all-subs")
+            table.insert(command, "--write-sub")
+            table.insert(command, "--embed-subs")
+            if opts.sub_format and opts.sub_format  ~= "" then
+                table.insert(command, "--sub-format")
+                table.insert(command, opts.sub_format)
+            end
+        end
         if opts.video_format and opts.video_format  ~= "" then
           table.insert(command, "--format")
           table.insert(command, opts.video_format)
@@ -173,10 +215,16 @@ local function download(audio_only)
     end
     table.insert(command, url)
 
+    -- Show download indicator
+    mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛💾")
+
     -- Start download
     local status, stdout, stderr = exec(command, true, true)
 
     is_downloading = false
+
+    -- Hide download indicator
+    mp.set_osd_ass(0, 0, "")
 
     if (status ~= 0) then
         mp.osd_message("download failed:\n" .. tostring(stderr), 10)
@@ -192,6 +240,12 @@ local function download(audio_only)
         return
     end
 
+    -- Show warning
+    if string.find(stderr, "WARNING:") ~=nil then
+        local warning = stderr:match("WARNING:%s+([^\n]+)")
+        mp.osd_message("⚠️" .. warning, 10)
+        return
+    end
 
     -- Retrieve the file name
     local filename = nil
@@ -238,11 +292,19 @@ local function download(audio_only)
 end
 
 local function download_video()
-    return download(false)
+    return download(DOWNLOAD.VIDEO)
 end
 
 local function download_audio()
-    return download(true)
+    return download(DOWNLOAD.AUDIO)
+end
+
+local function download_subtitle()
+    return download(DOWNLOAD.SUBTITLE)
+end
+
+local function download_embed_subtitle()
+    return download(DOWNLOAD.VIDEO_EMBED_SUBTITLE)
 end
 
 -- keybind
@@ -251,4 +313,10 @@ if opts.download_video_binding and opts.download_video_binding ~= "" then
 end
 if opts.download_audio_binding and opts.download_audio_binding ~= "" then
     mp.add_key_binding(opts.download_audio_binding, "download-audio", download_audio)
+end
+if opts.download_subtitle_binding and opts.download_subtitle_binding ~= "" then
+    mp.add_key_binding(opts.download_subtitle_binding, "download-subtitle", download_subtitle)
+end
+if opts.download_video_embed_subtitle_binding and opts.download_video_embed_subtitle_binding ~= "" then
+    mp.add_key_binding(opts.download_video_embed_subtitle_binding, "download-embed-subtitle", download_embed_subtitle)
 end
