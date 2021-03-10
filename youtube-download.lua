@@ -68,6 +68,15 @@ local opts = {
 --Read configuration file
 (require 'mp.options').read_options(opts, "youtube-download")
 
+--Read command line arguments
+local ytdl_raw_options = mp.get_property("ytdl-raw-options")
+if ytdl_raw_options ~= nil and ytdl_raw_options:find("cookies=") ~= nil then
+    local cookie_file = ytdl_raw_options:match("cookies=([^,]+)")
+    if cookie_file ~= nil then
+        opts.cookies = cookie_file
+    end
+end
+
 local function exec(args, capture_stdout, capture_stderr)
     local ret = mp.command_native({
         name = "subprocess",
