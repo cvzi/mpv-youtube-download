@@ -244,7 +244,10 @@ local function download(download_type)
     if string.find(stderr, "WARNING:") ~=nil then
         local warning = stderr:match("WARNING:%s+([^\n]+)")
         mp.osd_message("⚠️" .. warning, 10)
-        return
+        msg.warn("WARNING: " .. tostring(warning))
+        if warning:find("incompatible for merge") == nil then
+            return
+        end
     end
 
     -- Retrieve the file name
