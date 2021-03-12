@@ -75,7 +75,7 @@ local opts = {
     sub_format = "best",
 
     -- Log file for download errors
-    log_file = "log.txt",
+    log_file = "",
 
 }
 
