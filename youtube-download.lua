@@ -72,7 +72,10 @@ local opts = {
 
     -- Subtitle format
     -- Same as youtube-dl --sub-format best
-    sub_format = "best"
+    sub_format = "best",
+
+    -- Log file for download errors
+    log_file = "log.txt",
 
 }
 
@@ -88,13 +91,12 @@ if ytdl_raw_options ~= nil and ytdl_raw_options:find("cookies=") ~= nil then
     end
 end
 
-
 local function exec(args, capture_stdout, capture_stderr)
     local ret = mp.command_native({
         name = "subprocess",
         playback_only = false,
-        capture_stdout = capture_stdout or false,
-        capture_stderr = capture_stderr or true,
+        capture_stdout = capture_stdout,
+        capture_stderr = capture_stderr,
         args = args,
     })
     return ret.status, ret.stdout, ret.stderr, ret
@@ -117,6 +119,7 @@ local DOWNLOAD = {
 
 local is_downloading = false
 local function download(download_type)
+    local start_time = os.date("%c")
     msg.verbose("download()")
     if is_downloading then
         return
@@ -219,12 +222,30 @@ local function download(download_type)
     mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛💾")
 
     -- Start download
+    msg.debug("exec: " .. table.concat(command, " "))
     local status, stdout, stderr = exec(command, true, true)
 
     is_downloading = false
 
     -- Hide download indicator
     mp.set_osd_ass(0, 0, "")
+
+    local wrote_error_log = false
+    if stderr ~= nil and opts.log_file ~= "" and stderr:gsub("^%s+", ""):gsub("%s+$", "") ~= "" then
+        -- Write stderr to log file
+        local title = mp.get_property("media-title")
+        local file = io.open (opts.log_file , "a+")
+        file:write("\n[")
+        file:write(start_time)
+        file:write("] ")
+        file:write(url)
+        file:write("\n[\"")
+        file:write(title)
+        file:write("\"]\n")
+        file:write(stderr)
+        file:close()
+        wrote_error_log = true
+    end
 
     if (status ~= 0) then
         mp.osd_message("download failed:\n" .. tostring(stderr), 10)
@@ -238,16 +259,6 @@ local function download(download_type)
     if string.find(stdout, "has already been recorded in archive") ~=nil then
         mp.osd_message("Has already been recorded in archive", 5)
         return
-    end
-
-    -- Show warning
-    if string.find(stderr, "WARNING:") ~=nil then
-        local warning = stderr:match("WARNING:%s+([^\n]+)")
-        mp.osd_message("⚠️" .. warning, 10)
-        msg.warn("WARNING: " .. tostring(warning))
-        if warning:find("incompatible for merge") == nil then
-            return
-        end
     end
 
     -- Retrieve the file name
@@ -267,6 +278,11 @@ local function download(download_type)
         end
     end
 
+    local osd_text = "Download succeeded\n"
+    local osd_time = 5
+    local ass0 = mp.get_property("osd-ass-cc/0")
+    local ass1 =  mp.get_property("osd-ass-cc/1")
+    -- Find filename or directory
     if filename then
         local filepath
         local basepath
@@ -278,20 +294,41 @@ local function download(download_type)
           filepath = filename
         end
 
-        local osd_text
-        local ass0 = mp.get_property("osd-ass-cc/0")
-        local ass1 =  mp.get_property("osd-ass-cc/1")
         if filepath:len() < 100 then
-            osd_text = ass0 .. "{\\fs12} " .. filepath .. " {\\fs20}" .. ass1
+            osd_text = osd_text .. ass0 .. "{\\fs12} " .. filepath .. " {\\fs20}" .. ass1
         elseif basepath == "" then
-            osd_text = ass0 .. "{\\fs8} " .. filepath .. " {\\fs20}" .. ass1
+            osd_text = osd_text .. ass0 .. "{\\fs8} " .. filepath .. " {\\fs20}" .. ass1
         else
-            osd_text = ass0 .. "{\\fs11} " .. basepath .. "\n" .. filename .. " {\\fs20}" ..  ass1
+            osd_text = osd_text .. ass0 .. "{\\fs11} " .. basepath .. "\n" .. filename .. " {\\fs20}" ..  ass1
         end
-        mp.osd_message("Download succeeded\n" .. osd_text, 5)
+        if wrote_error_log then
+            -- Write filename and end time to log file
+            local file = io.open (opts.log_file , "a+")
+            file:write("[" .. filepath .. "]\n")
+            file:write(os.date("[end %c]\n"))
+            file:close()
+        end
     else
-        mp.osd_message("Download succeeded\n" .. utils.getcwd(), 5)
+        if wrote_error_log then
+            -- Write directory and end time to log file
+            local file = io.open (opts.log_file , "a+")
+            file:write("[" .. utils.getcwd() .. "]\n")
+            file:write(os.date("[end %c]\n"))
+            file:close()
+        end
+        osd_text = osd_text .. utils.getcwd()
     end
+
+    -- Show warnings
+    if stderr ~= nil and stderr:gsub("^%s+", ""):gsub("%s+$", "") ~= "" then
+        msg.warn("Errorlog:" .. tostring(stderr))
+        if stderr:find("incompatible for merge") == nil then
+            osd_text = osd_text .. "\n" .. ass0 .. "{\\fs9} " .. stderr .. ass1
+            osd_time = osd_time + 5
+        end
+    end
+
+    mp.osd_message(osd_text, osd_time)
 end
 
 local function download_video()
