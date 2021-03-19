@@ -349,15 +349,15 @@ local function select_range_show()
     local status
     if select_range_mode > 0 then
         if select_range_mode == 2 then
-            status = "Download interval: Fine tune\n← → start time\n↓ ↑ end time\n" ..
+            status = "Download range: Fine tune\n← → start time\n↓ ↑ end time\n" ..
                 tostring(opts.select_range_binding) .. " next mode"
         elseif select_range_mode == 1 then
-            status = "Download interval: Select range\n← start here\n→ end here\n↓from beginning\n↑til end\n" ..
+            status = "Download range: Select interval\n← start here\n→ end here\n↓from beginning\n↑til end\n" ..
                 tostring(opts.select_range_binding) .. " next mode"
         end
         mp.osd_message("Start: " .. start_time_formated .. "\nEnd:  " .. end_time_formated .. "\n" .. status, 30)
     else
-        status = "Range interval: Disabled (download full length)"
+        status = "Download range: Disabled (download full length)"
         mp.osd_message(status, 3)
     end
 end
