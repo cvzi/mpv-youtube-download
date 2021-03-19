@@ -20,6 +20,7 @@ local opts = {
     download_audio_binding = "ctrl+a",
     download_subtitle_binding = "ctrl+s",
     download_video_embed_subtitle_binding = "ctrl+i",
+    select_range_binding = "ctrl+r",
 
     -- Specify audio format: "best", "aac","flac", "mp3", "m4a", "opus", "vorbis", or "wav"
     audio_format = "mp3",
@@ -116,6 +117,11 @@ local DOWNLOAD = {
     SUBTITLE=3,
     VIDEO_EMBED_SUBTITLE=4
 }
+local select_range_mode = 0
+local start_time_seconds = nil
+local start_time_formated = nil
+local end_time_seconds = nil
+local end_time_formated = nil
 
 local is_downloading = false
 local function download(download_type)
@@ -216,6 +222,14 @@ local function download(download_type)
         table.insert(command, "--cookies")
         table.insert(command, opts.cookies)
     end
+    if select_range_mode > 0 then
+         table.insert(command, "--external-downloader")
+         table.insert(command, "ffmpeg")
+         table.insert(command, "--external-downloader-args")
+         table.insert(command, "-ss ".. tostring(start_time_seconds) .. " -to " .. tostring(end_time_seconds))
+         select_range_mode = 0
+    end
+
     table.insert(command, url)
 
     -- Show download indicator
@@ -331,6 +345,115 @@ local function download(download_type)
     mp.osd_message(osd_text, osd_time)
 end
 
+local function select_range_show()
+    local status
+    if select_range_mode > 0 then
+        if select_range_mode == 2 then
+            status = "Download interval: Fine tune\n← → start time\n↓ ↑ end time\n" ..
+                tostring(opts.select_range_binding) .. " next mode"
+        elseif select_range_mode == 1 then
+            status = "Download interval: Select range\n← start here\n→ end here\n↓from beginning\n↑til end\n" ..
+                tostring(opts.select_range_binding) .. " next mode"
+        end
+        mp.osd_message("Start: " .. start_time_formated .. "\nEnd:  " .. end_time_formated .. "\n" .. status, 30)
+    else
+        status = "Range interval: Disabled (download full length)"
+        mp.osd_message(status, 3)
+    end
+end
+
+local function select_range_set_left()
+    if select_range_mode == 2 then
+        start_time_seconds = math.max(0, start_time_seconds - 1)
+        if start_time_seconds < 86400 then
+            start_time_formated = os.date("!%H:%M:%S", start_time_seconds)
+        else
+            start_time_formated = tostring(start_time_seconds) .. "s"
+        end
+    elseif select_range_mode == 1 then
+        start_time_seconds = mp.get_property_number("time-pos")
+        start_time_formated = mp.command_native({"expand-text","${time-pos}"})
+    end
+    select_range_show()
+end
+
+local function select_range_set_start()
+    if select_range_mode == 2 then
+        end_time_seconds = math.max(1, end_time_seconds - 1)
+        if end_time_seconds < 86400 then
+            end_time_formated = os.date("!%H:%M:%S", end_time_seconds)
+        else
+            end_time_formated = tostring(end_time_seconds) .. "s"
+        end
+    elseif select_range_mode == 1 then
+        start_time_seconds = 0
+        start_time_formated = "00:00:00"
+    end
+    select_range_show()
+end
+
+local function select_range_set_end()
+    if select_range_mode == 2 then
+        end_time_seconds = math.min(mp.get_property_number("duration"), end_time_seconds + 1)
+        if end_time_seconds < 86400 then
+            end_time_formated = os.date("!%H:%M:%S", end_time_seconds)
+        else
+            end_time_formated = tostring(end_time_seconds) .. "s"
+        end
+    elseif select_range_mode == 1 then
+        end_time_seconds = mp.get_property_number("duration")
+        end_time_formated =  mp.command_native({"expand-text","${duration}"})
+    end
+    select_range_show()
+end
+
+local function select_range_set_right()
+    if select_range_mode == 2 then
+        start_time_seconds = math.min(mp.get_property_number("duration") - 1, start_time_seconds + 1)
+        if start_time_seconds < 86400 then
+            start_time_formated = os.date("!%H:%M:%S", start_time_seconds)
+        else
+            start_time_formated = tostring(start_time_seconds) .. "s"
+        end
+    elseif select_range_mode == 1 then
+        end_time_seconds = mp.get_property_number("time-pos")
+        end_time_formated = mp.command_native({"expand-text","${time-pos}"})
+    end
+    select_range_show()
+end
+
+local function select_range()
+    -- Cycle through modes
+    if select_range_mode == 2 then
+        -- Disable range mode
+        select_range_mode = 0
+        -- Remove the arrow key key bindings
+        mp.remove_key_binding("select-range-set-up")
+        mp.remove_key_binding("select-range-set-down")
+        mp.remove_key_binding("select-range-set-left")
+        mp.remove_key_binding("select-range-set-right")
+    elseif select_range_mode == 1 then
+        -- Switch to "fine tune" mode
+        select_range_mode = 2
+    else
+        select_range_mode = 1
+        -- Add keybinds for arrow keys
+        mp.add_key_binding("up", "select-range-set-up", select_range_set_end)
+        mp.add_key_binding("down", "select-range-set-down", select_range_set_start)
+        mp.add_key_binding("left", "select-range-set-left", select_range_set_left)
+        mp.add_key_binding("right", "select-range-set-right", select_range_set_right)
+
+        -- Defaults
+        if start_time_seconds == nil then
+            start_time_seconds = mp.get_property_number("time-pos")
+            start_time_formated = mp.command_native({"expand-text","${time-pos}"})
+            end_time_seconds = mp.get_property_number("duration")
+            end_time_formated =  mp.command_native({"expand-text","${duration}"})
+        end
+    end
+    select_range_show()
+end
+
 local function download_video()
     return download(DOWNLOAD.VIDEO)
 end
@@ -359,4 +482,7 @@ if opts.download_subtitle_binding and opts.download_subtitle_binding ~= "" then
 end
 if opts.download_video_embed_subtitle_binding and opts.download_video_embed_subtitle_binding ~= "" then
     mp.add_key_binding(opts.download_video_embed_subtitle_binding, "download-embed-subtitle", download_embed_subtitle)
+end
+if opts.select_range_binding and opts.select_range_binding ~= "" then
+    mp.add_key_binding(opts.select_range_binding, "select-range-start", select_range)
 end
