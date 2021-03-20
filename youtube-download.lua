@@ -164,73 +164,122 @@ local function download(download_type)
     end
 
     -- Compose command line arguments
-    local command = {"youtube-dl", "--no-overwrites"}
-    if opts.restrict_filenames then
-      table.insert(command, "--restrict-filenames")
-    end
-    if opts.filename and opts.filename ~= "" then
-        table.insert(command, "-o")
-        table.insert(command, opts.filename)
-    end
-    if opts.no_playlist then
-        table.insert(command, "--no-playlist")
-    end
-    if download_archive and download_archive ~= "" then
-        table.insert(command, "--download-archive")
-        table.insert(command, download_archive)
-    end
+    local command = {}
+    --local command = {"youtube-dl", "--no-overwrites"}
 
-    if download_type == DOWNLOAD.SUBTITLE then
-        table.insert(command, "--sub-lang")
-        table.insert(command, opts.sub_lang)
-        table.insert(command, "--write-sub")
-        table.insert(command, "--skip-download")
-        if opts.sub_format and opts.sub_format  ~= "" then
-            table.insert(command, "--sub-format")
-            table.insert(command, opts.sub_format)
+    if select_range_mode == 0 then
+        table.insert(command, "youtube-dl")
+        table.insert(command, "--no-overwrites")
+        if opts.restrict_filenames then
+          table.insert(command, "--restrict-filenames")
         end
-    elseif download_type == DOWNLOAD.AUDIO then
-        table.insert(command, "--extract-audio")
-        if opts.audio_format and opts.audio_format  ~= "" then
-          table.insert(command, "--audio-format")
-          table.insert(command, opts.audio_format)
+        if opts.filename and opts.filename ~= "" then
+            table.insert(command, "-o")
+            table.insert(command, opts.filename)
         end
-        if opts.audio_quality and opts.audio_quality  ~= "" then
-          table.insert(command, "--audio-quality")
-          table.insert(command, opts.audio_quality)
+        if opts.no_playlist then
+            table.insert(command, "--no-playlist")
         end
-    else --DOWNLOAD.VIDEO or DOWNLOAD.VIDEO_EMBED_SUBTITLE
-        if download_type == DOWNLOAD.VIDEO_EMBED_SUBTITLE then
-            table.insert(command, "--all-subs")
+        if download_archive and download_archive ~= "" then
+            table.insert(command, "--download-archive")
+            table.insert(command, download_archive)
+        end
+
+        if download_type == DOWNLOAD.SUBTITLE then
+            table.insert(command, "--sub-lang")
+            table.insert(command, opts.sub_lang)
             table.insert(command, "--write-sub")
-            table.insert(command, "--embed-subs")
+            table.insert(command, "--skip-download")
             if opts.sub_format and opts.sub_format  ~= "" then
                 table.insert(command, "--sub-format")
                 table.insert(command, opts.sub_format)
             end
+        elseif download_type == DOWNLOAD.AUDIO then
+            table.insert(command, "--extract-audio")
+            if opts.audio_format and opts.audio_format  ~= "" then
+              table.insert(command, "--audio-format")
+              table.insert(command, opts.audio_format)
+            end
+            if opts.audio_quality and opts.audio_quality  ~= "" then
+              table.insert(command, "--audio-quality")
+              table.insert(command, opts.audio_quality)
+            end
+        else --DOWNLOAD.VIDEO or DOWNLOAD.VIDEO_EMBED_SUBTITLE
+            if download_type == DOWNLOAD.VIDEO_EMBED_SUBTITLE then
+                table.insert(command, "--all-subs")
+                table.insert(command, "--write-sub")
+                table.insert(command, "--embed-subs")
+                if opts.sub_format and opts.sub_format  ~= "" then
+                    table.insert(command, "--sub-format")
+                    table.insert(command, opts.sub_format)
+                end
+            end
+            if opts.video_format and opts.video_format  ~= "" then
+              table.insert(command, "--format")
+              table.insert(command, opts.video_format)
+            end
+            if opts.recode_video and opts.recode_video  ~= "" then
+              table.insert(command, "--recode-video")
+              table.insert(command, opts.recode_video)
+            end
         end
-        if opts.video_format and opts.video_format  ~= "" then
-          table.insert(command, "--format")
-          table.insert(command, opts.video_format)
+        if opts.cookies and opts.cookies  ~= "" and opts.cookies:gsub("^%s+", ""):gsub("%s+$", "") ~= "" then
+            table.insert(command, "--cookies")
+            table.insert(command, opts.cookies)
         end
-        if opts.recode_video and opts.recode_video  ~= "" then
-          table.insert(command, "--recode-video")
-          table.insert(command, opts.recode_video)
-        end
-    end
-    if opts.cookies and opts.cookies  ~= "" and opts.cookies:gsub("^%s+", ""):gsub("%s+$", "") ~= "" then
-        table.insert(command, "--cookies")
-        table.insert(command, opts.cookies)
-    end
-    if select_range_mode > 0 then
-         table.insert(command, "--external-downloader")
-         table.insert(command, "ffmpeg")
-         table.insert(command, "--external-downloader-args")
-         table.insert(command, "-ss ".. tostring(start_time_seconds) .. " -to " .. tostring(end_time_seconds))
-         select_range_mode = 0
+        table.insert(command, url)
+
+    elseif select_range_mode > 0 then
+        -- TODO only do this for formats where it is necessary. For -f best it is not necessary, we can use the old version for -f best
+        -- TODO for only audio we also need the old version
+
+        -- Show download indicator
+        mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔗")
+
+        -- Get the download url of the video file
+        table.insert(command, "youtube-dl")
+        -- TODO custom parameters, like cookies
+        table.insert(command, "-g")
+        table.insert(command, url)
+        table.insert(command, "--no-playlist")
+        table.insert(command, "-f")
+        table.insert(command, "bestvideo")  -- TODO custom format?
+        local status, bestvideo, stderr = exec(command, true, true)
+        msg.debug("bestvideo: " .. bestvideo)
+
+        -- Get the download url of the audio file
+        table.remove(command) -- remove bestvideo
+        table.insert(command, "bestaudio")  -- TODO custom format?
+        status, bestaudio, stderr = exec(command, true, true)
+        msg.debug("bestaudio: " .. bestaudio)
+
+        -- TODO download subtitles?
+
+        command = {}
+        table.insert(command, "ffmpeg")
+        table.insert(command, "-y")
+        table.insert(command, "-ss")
+        table.insert(command, tostring(math.floor(start_time_seconds)))
+        table.insert(command, "-to")
+        table.insert(command, tostring(math.floor(end_time_seconds)))
+        table.insert(command, "-i")
+        table.insert(command, bestvideo)
+        table.insert(command, "-ss")
+        table.insert(command, tostring(math.floor(start_time_seconds)))
+        table.insert(command, "-to")
+        table.insert(command, tostring(math.floor(end_time_seconds)))
+        table.insert(command, "-i")
+        table.insert(command, bestaudio)
+        table.insert(command, "-c")
+        table.insert(command, "copy")
+        -- TODO custom file title? get it with simulation?
+        -- TODO timerange in filename
+        table.insert(command, "out.mkv")
+
+
+        select_range_mode = 0
     end
 
-    table.insert(command, url)
 
     -- Show download indicator
     mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛💾")
