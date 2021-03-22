@@ -167,6 +167,9 @@ local function download(download_type)
     local command = {}
     --local command = {"youtube-dl", "--no-overwrites"}
 
+    local rangeModeFilename = nil
+    local start_time_offset = 0
+
     if select_range_mode == 0 then
         table.insert(command, "youtube-dl")
         table.insert(command, "--no-overwrites")
@@ -230,51 +233,118 @@ local function download(download_type)
         table.insert(command, url)
 
     elseif select_range_mode > 0 then
-        -- TODO only do this for formats where it is necessary. For -f best it is not necessary, we can use the old version for -f best
+        -- TODO only do this for formats where it is necessary.
+        --      For -f best it is not necessary, we can use the old version for -f best
         -- TODO for only audio we also need the old version
 
         -- Show download indicator
         mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔗")
 
         -- Get the download url of the video file
-        table.insert(command, "youtube-dl")
+        command = {"youtube-dl"}
         -- TODO custom parameters, like cookies
         table.insert(command, "-g")
         table.insert(command, url)
         table.insert(command, "--no-playlist")
         table.insert(command, "-f")
         table.insert(command, "bestvideo")  -- TODO custom format?
-        local status, bestvideo, stderr = exec(command, true, true)
+        local _, bestvideo, _ = exec(command, true, true)
         msg.debug("bestvideo: " .. bestvideo)
 
         -- Get the download url of the audio file
         table.remove(command) -- remove bestvideo
         table.insert(command, "bestaudio")  -- TODO custom format?
-        status, bestaudio, stderr = exec(command, true, true)
+        local _, bestaudio, _ = exec(command, true, true)
         msg.debug("bestaudio: " .. bestaudio)
 
         -- TODO download subtitles?
+
+        start_time_seconds = math.floor(start_time_seconds)
+        end_time_seconds = math.ceil(end_time_seconds)
+
+        local start_time_str = tostring(start_time_seconds)
+        local end_time_str = tostring(end_time_seconds)
+
+        -- Get the file name of the video
+        local filename_format
+        rangeModeFilename = "out.mp4"
+        -- Insert start time/end time
+        if opts.filename and opts.filename ~= "" then
+            if opts.filename:find("%%%(start_time%)") ~= nil then
+                msg.warn("Found start_time -> replacing")
+                filename_format = tostring(opts.filename:
+                    gsub("%%%(start_time%)[^diouxXeEfFgGcrs]*[diouxXeEfFgGcrs]", start_time_str):
+                    gsub("%%%(end_time%)[^diouxXeEfFgGcrs]*[diouxXeEfFgGcrs]", end_time_str))
+            else
+                msg.warn("No start_time -> inserting")
+                local ext_pattern = "%(ext)s"
+                if opts.filename:sub(-#ext_pattern) == ext_pattern then
+                    msg.warn("Ends with ext")
+                    filename_format = opts.filename:sub(1, #(opts.filename) - #ext_pattern) ..
+                        start_time_str .. "-" ..
+                        end_time_str .. ".%(ext)s"
+                else
+                    msg.warn(" append ")
+                    filename_format = opts.filename .. start_time_str .. "-" .. end_time_str
+                end
+            end
+        else
+            filename_format = "%(title)s-%(id)s." .. start_time_str .. "-" .. end_time_str .. ".%(ext)s"
+        end
+
+        command = {"youtube-dl"}
+        if opts.restrict_filenames then
+            table.insert(command, "--restrict-filenames")
+        end
+        table.insert(command, "-f")
+        table.insert(command, "bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best")
+        table.insert(command, "-o")
+        table.insert(command, filename_format)
+        table.insert(command, "-s")
+        table.insert(command, "--get-filename")
+        table.insert(command, url)
+        local status, filename_stdout, _ = exec(command, true, true)
+        if status == 0 then
+            filename_stdout = filename_stdout:gsub("^%s+", ""):gsub("%s+$", "")
+            if filename_stdout ~= "" then
+                -- TODO timerange in filename
+                rangeModeFilename = filename_stdout
+            end
+        end
+        if rangeModeFilename == "out.mp4" and url:find("youtube") ~=nil and url:find("=") ~=nil then
+            rangeModeFilename = "v_" .. url:sub(url:find("=") + 1) ..
+                "." .. start_time_str .. "-" .. end_time_str .. ".mp4"
+        elseif rangeModeFilename == "out.mp4" then
+            rangeModeFilename = "out." .. start_time_str .. "-" .. end_time_str .. ".mp4"
+        end
+
+        -- Download earlier (cut off afterwards)
+        start_time_offset = math.min(7, start_time_seconds)
+        start_time_seconds = start_time_seconds - start_time_offset
+
+        start_time_str = tostring(start_time_seconds)
+        end_time_str = tostring(end_time_seconds)
 
         command = {}
         table.insert(command, "ffmpeg")
         table.insert(command, "-y")
         table.insert(command, "-ss")
-        table.insert(command, tostring(math.floor(start_time_seconds)))
+        table.insert(command, start_time_str)
         table.insert(command, "-to")
-        table.insert(command, tostring(math.floor(end_time_seconds)))
+        table.insert(command, end_time_str)
         table.insert(command, "-i")
         table.insert(command, bestvideo)
         table.insert(command, "-ss")
-        table.insert(command, tostring(math.floor(start_time_seconds)))
+        table.insert(command, start_time_str)
         table.insert(command, "-to")
-        table.insert(command, tostring(math.floor(end_time_seconds)))
+        table.insert(command, end_time_str)
         table.insert(command, "-i")
         table.insert(command, bestaudio)
         table.insert(command, "-c")
         table.insert(command, "copy")
-        -- TODO custom file title? get it with simulation?
-        -- TODO timerange in filename
-        table.insert(command, "out.mkv")
+        table.insert(command, "-avoid_negative_ts")
+        table.insert(command, "make_zero")
+        table.insert(command, rangeModeFilename)
 
 
         select_range_mode = 0
@@ -287,6 +357,29 @@ local function download(download_type)
     -- Start download
     msg.debug("exec: " .. table.concat(command, " "))
     local status, stdout, stderr = exec(command, true, true)
+
+    if status == 0 and rangeModeFilename ~= nil then
+        mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔨")
+
+        -- Cut first few seconds to fix errors
+        local start_time_offset_str = tostring(start_time_offset)
+        if #start_time_offset_str == 1 then
+            start_time_offset_str = "0" .. start_time_offset_str
+        end
+        command = {"ffmpeg", "-y", "-ss", "00:00:".. start_time_offset_str, "-i", rangeModeFilename,
+            "-avoid_negative_ts", "make_zero", "-c", "copy", "tmp." .. rangeModeFilename}
+        msg.debug("mux exec: " .. table.concat(command, " "))
+        local muxstatus, _, muxstderr = exec(command, false, true)
+        if muxstderr ~= nil and muxstderr:gsub("^%s+", ""):gsub("%s+$", "") ~= "" then
+            msg.warn("Remux errorlog:" .. tostring(muxstderr))
+        end
+        if muxstatus == 0 then
+            os.remove(rangeModeFilename)
+            os.rename("tmp." .. rangeModeFilename, rangeModeFilename)
+        end
+
+    end
+
 
     is_downloading = false
 
