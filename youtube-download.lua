@@ -103,6 +103,17 @@ local function exec(args, capture_stdout, capture_stderr)
     return ret.status, ret.stdout, ret.stderr, ret
 end
 
+local function trim(str)
+    return str:gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function not_empty(str)
+    if str == nil or str == "" then
+        return false
+    end
+    return trim(str) ~= ""
+end
+
 local function path_separator()
     return package.config:sub(1,1)
 end
@@ -133,6 +144,8 @@ local function download(download_type)
     is_downloading = true
     msg.verbose("download() aquired")
 
+    local ass0 = mp.get_property("osd-ass-cc/0")
+    local ass1 =  mp.get_property("osd-ass-cc/1")
     local url = mp.get_property("path")
 
     url = string.gsub(url, "ytdl://", "") -- Strip possible ytdl:// prefix.
@@ -165,7 +178,6 @@ local function download(download_type)
 
     -- Compose command line arguments
     local command = {}
-    --local command = {"youtube-dl", "--no-overwrites"}
 
     local rangeModeFilename = nil
     local start_time_offset = 0
@@ -176,14 +188,14 @@ local function download(download_type)
         if opts.restrict_filenames then
           table.insert(command, "--restrict-filenames")
         end
-        if opts.filename and opts.filename ~= "" then
+        if not_empty(opts.filename) then
             table.insert(command, "-o")
             table.insert(command, opts.filename)
         end
         if opts.no_playlist then
             table.insert(command, "--no-playlist")
         end
-        if download_archive and download_archive ~= "" then
+        if not_empty(download_archive) then
             table.insert(command, "--download-archive")
             table.insert(command, download_archive)
         end
@@ -193,17 +205,17 @@ local function download(download_type)
             table.insert(command, opts.sub_lang)
             table.insert(command, "--write-sub")
             table.insert(command, "--skip-download")
-            if opts.sub_format and opts.sub_format  ~= "" then
+            if not_empty(opts.sub_format) then
                 table.insert(command, "--sub-format")
                 table.insert(command, opts.sub_format)
             end
         elseif download_type == DOWNLOAD.AUDIO then
             table.insert(command, "--extract-audio")
-            if opts.audio_format and opts.audio_format  ~= "" then
+            if not_empty(opts.audio_format) then
               table.insert(command, "--audio-format")
               table.insert(command, opts.audio_format)
             end
-            if opts.audio_quality and opts.audio_quality  ~= "" then
+            if not_empty(opts.audio_quality) then
               table.insert(command, "--audio-quality")
               table.insert(command, opts.audio_quality)
             end
@@ -212,21 +224,21 @@ local function download(download_type)
                 table.insert(command, "--all-subs")
                 table.insert(command, "--write-sub")
                 table.insert(command, "--embed-subs")
-                if opts.sub_format and opts.sub_format  ~= "" then
+                if not_empty(opts.sub_format) then
                     table.insert(command, "--sub-format")
                     table.insert(command, opts.sub_format)
                 end
             end
-            if opts.video_format and opts.video_format  ~= "" then
+            if not_empty(opts.video_format) then
               table.insert(command, "--format")
               table.insert(command, opts.video_format)
             end
-            if opts.recode_video and opts.recode_video  ~= "" then
+            if not_empty(opts.recode_video) then
               table.insert(command, "--recode-video")
               table.insert(command, opts.recode_video)
             end
         end
-        if opts.cookies and opts.cookies  ~= "" and opts.cookies:gsub("^%s+", ""):gsub("%s+$", "") ~= "" then
+        if not_empty(opts.cookies) then
             table.insert(command, "--cookies")
             table.insert(command, opts.cookies)
         end
@@ -240,21 +252,43 @@ local function download(download_type)
         -- Show download indicator
         mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔗")
 
+        -- TODO instead of calling youtube-dl three times, we can comine in into one command:
+        -- youtube-dl -g -f bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best -s --get-filename https://www.youtube.com/watch?v=kcGYk2OWQkY
+
         -- Get the download url of the video file
         command = {"youtube-dl"}
-        -- TODO custom parameters, like cookies
+        if not_empty(opts.cookies) then
+            table.insert(command, "--cookies")
+            table.insert(command, opts.cookies)
+        end
         table.insert(command, "-g")
         table.insert(command, url)
         table.insert(command, "--no-playlist")
         table.insert(command, "-f")
         table.insert(command, "bestvideo")  -- TODO custom format?
-        local _, bestvideo, _ = exec(command, true, true)
+        local bestvideostatus, bestvideo, bestvideoerr = exec(command, true, true)
+        if bestvideostatus ~= 0 then
+            mp.set_osd_ass(0, 0, "")
+            mp.osd_message("Could not retieve bestvideo url:\n" ..ass0 .. "{\\fs8} " ..
+                bestvideo:gsub("\r", "") .."\n" ..
+                bestvideoerr:gsub("\r", "") .. ass1, 20)
+            msg.debug("bestvideo stdout:\n" .. bestvideo)
+            msg.debug("bestvideo stderr:\n" .. bestvideoerr)
+        end
         msg.debug("bestvideo: " .. bestvideo)
 
         -- Get the download url of the audio file
         table.remove(command) -- remove bestvideo
         table.insert(command, "bestaudio")  -- TODO custom format?
-        local _, bestaudio, _ = exec(command, true, true)
+        local bestaudiostatus, bestaudio, bestaudioerr = exec(command, true, true)
+        if bestaudiostatus ~= 0 then
+            mp.set_osd_ass(0, 0, "")
+            mp.osd_message("Could not retieve bestaudio url:\n" ..ass0 .. "{\\fs8} " ..
+                bestaudio:gsub("\r", "") .."\n" ..
+                bestaudioerr:gsub("\r", "") .. ass1, 20)
+            msg.debug("bestaudio stdout:\n" .. bestaudio)
+            msg.debug("bestaudio stderr:\n" .. bestaudioerr)
+        end
         msg.debug("bestaudio: " .. bestaudio)
 
         -- TODO download subtitles?
@@ -269,32 +303,36 @@ local function download(download_type)
         local filename_format
         rangeModeFilename = "out.mp4"
         -- Insert start time/end time
-        if opts.filename and opts.filename ~= "" then
+        if not_empty(opts.filename) then
             if opts.filename:find("%%%(start_time%)") ~= nil then
-                msg.warn("Found start_time -> replacing")
+                -- Found "start_time" -> replace it
                 filename_format = tostring(opts.filename:
                     gsub("%%%(start_time%)[^diouxXeEfFgGcrs]*[diouxXeEfFgGcrs]", start_time_str):
                     gsub("%%%(end_time%)[^diouxXeEfFgGcrs]*[diouxXeEfFgGcrs]", end_time_str))
             else
-                msg.warn("No start_time -> inserting")
                 local ext_pattern = "%(ext)s"
                 if opts.filename:sub(-#ext_pattern) == ext_pattern then
-                    msg.warn("Ends with ext")
+                    -- Insert before ext
                     filename_format = opts.filename:sub(1, #(opts.filename) - #ext_pattern) ..
                         start_time_str .. "-" ..
                         end_time_str .. ".%(ext)s"
                 else
-                    msg.warn(" append ")
+                    -- append at end
                     filename_format = opts.filename .. start_time_str .. "-" .. end_time_str
                 end
             end
         else
+            -- default youtube-dl filename pattern
             filename_format = "%(title)s-%(id)s." .. start_time_str .. "-" .. end_time_str .. ".%(ext)s"
         end
 
         command = {"youtube-dl"}
         if opts.restrict_filenames then
             table.insert(command, "--restrict-filenames")
+        end
+        if not_empty(opts.cookies) then
+            table.insert(command, "--cookies")
+            table.insert(command, opts.cookies)
         end
         table.insert(command, "-f")
         table.insert(command, "bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best")
@@ -303,11 +341,10 @@ local function download(download_type)
         table.insert(command, "-s")
         table.insert(command, "--get-filename")
         table.insert(command, url)
-        local status, filename_stdout, _ = exec(command, true, true)
+        local status, filename_stdout, _ = exec(command, true, false)
         if status == 0 then
-            filename_stdout = filename_stdout:gsub("^%s+", ""):gsub("%s+$", "")
-            if filename_stdout ~= "" then
-                -- TODO timerange in filename
+            filename_stdout = trim(filename_stdout)
+            if not_empty(filename_stdout) then
                 rangeModeFilename = filename_stdout
             end
         end
@@ -350,7 +387,6 @@ local function download(download_type)
         select_range_mode = 0
     end
 
-
     -- Show download indicator
     mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛💾")
 
@@ -369,8 +405,9 @@ local function download(download_type)
         command = {"ffmpeg", "-y", "-ss", "00:00:".. start_time_offset_str, "-i", rangeModeFilename,
             "-avoid_negative_ts", "make_zero", "-c", "copy", "tmp." .. rangeModeFilename}
         msg.debug("mux exec: " .. table.concat(command, " "))
-        local muxstatus, _, muxstderr = exec(command, false, true)
-        if muxstderr ~= nil and muxstderr:gsub("^%s+", ""):gsub("%s+$", "") ~= "" then
+        local muxstatus, muxstdout, muxstderr = exec(command, true, true)
+        if muxstatus ~= 0 and not_empty(muxstderr) then
+            msg.warn("Remux log:" .. tostring(muxstdout))
             msg.warn("Remux errorlog:" .. tostring(muxstderr))
         end
         if muxstatus == 0 then
@@ -387,7 +424,7 @@ local function download(download_type)
     mp.set_osd_ass(0, 0, "")
 
     local wrote_error_log = false
-    if stderr ~= nil and opts.log_file ~= "" and stderr:gsub("^%s+", ""):gsub("%s+$", "") ~= "" then
+    if stderr ~= nil and not_empty(opts.log_file) and not_empty(stderr) then
         -- Write stderr to log file
         local title = mp.get_property("media-title")
         local file = io.open (opts.log_file , "a+")
@@ -419,7 +456,7 @@ local function download(download_type)
 
     -- Retrieve the file name
     local filename = nil
-    if stdout then
+    if rangeModeFilename == nil and stdout then
         local i, j, last_i, start_index = 0
         while i ~= nil do
             last_i, start_index = i, j
@@ -429,15 +466,15 @@ local function download(download_type)
         if last_i ~= nil then
           local end_index = stdout:find ("\n", start_index, true)
           if end_index ~= nil and start_index ~= nil then
-            filename = stdout:sub(start_index, end_index):gsub("^%s+", ""):gsub("%s+$", "")
+            filename = trim(stdout:sub(start_index, end_index))
            end
         end
+    elseif not_empty(rangeModeFilename) then
+        filename = rangeModeFilename
     end
 
     local osd_text = "Download succeeded\n"
     local osd_time = 5
-    local ass0 = mp.get_property("osd-ass-cc/0")
-    local ass1 =  mp.get_property("osd-ass-cc/1")
     -- Find filename or directory
     if filename then
         local filepath
@@ -476,10 +513,14 @@ local function download(download_type)
     end
 
     -- Show warnings
-    if stderr ~= nil and stderr:gsub("^%s+", ""):gsub("%s+$", "") ~= "" then
+    if not_empty(stderr) then
         msg.warn("Errorlog:" .. tostring(stderr))
         if stderr:find("incompatible for merge") == nil then
-            osd_text = osd_text .. "\n" .. ass0 .. "{\\fs9} " .. stderr .. ass1
+            local i = stderr:find("Input #")
+            if i ~= nil then
+                stderr = stderr:sub(i):gsub("\r", "")
+            end
+            osd_text = osd_text .. "\n" .. ass0 .. "{\\fs8} " .. stderr .. ass1
             osd_time = osd_time + 5
         end
     end
@@ -613,18 +654,18 @@ local function download_embed_subtitle()
 end
 
 -- keybind
-if opts.download_video_binding and opts.download_video_binding ~= "" then
+if not_empty(opts.download_video_binding) then
     mp.add_key_binding(opts.download_video_binding, "download-video", download_video)
 end
-if opts.download_audio_binding and opts.download_audio_binding ~= "" then
+if not_empty(opts.download_audio_binding) then
     mp.add_key_binding(opts.download_audio_binding, "download-audio", download_audio)
 end
-if opts.download_subtitle_binding and opts.download_subtitle_binding ~= "" then
+if not_empty(opts.download_subtitle_binding) then
     mp.add_key_binding(opts.download_subtitle_binding, "download-subtitle", download_subtitle)
 end
-if opts.download_video_embed_subtitle_binding and opts.download_video_embed_subtitle_binding ~= "" then
+if not_empty(opts.download_video_embed_subtitle_binding) then
     mp.add_key_binding(opts.download_video_embed_subtitle_binding, "download-embed-subtitle", download_embed_subtitle)
 end
-if opts.select_range_binding and opts.select_range_binding ~= "" then
+if not_empty(opts.select_range_binding) then
     mp.add_key_binding(opts.select_range_binding, "select-range-start", select_range)
 end
