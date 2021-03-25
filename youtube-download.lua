@@ -248,50 +248,10 @@ local function download(download_type)
         -- TODO only do this for formats where it is necessary.
         --      For -f best it is not necessary, we can use the old version for -f best
         -- TODO for only audio we also need the old version
+        -- TODO for subtitle only: download whole subtitle
 
         -- Show download indicator
         mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔗")
-
-        -- TODO instead of calling youtube-dl three times, we can comine in into one command:
-        -- youtube-dl -g -f bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best -s --get-filename https://www.youtube.com/watch?v=kcGYk2OWQkY
-
-        -- Get the download url of the video file
-        command = {"youtube-dl"}
-        if not_empty(opts.cookies) then
-            table.insert(command, "--cookies")
-            table.insert(command, opts.cookies)
-        end
-        table.insert(command, "-g")
-        table.insert(command, url)
-        table.insert(command, "--no-playlist")
-        table.insert(command, "-f")
-        table.insert(command, "bestvideo")  -- TODO custom format?
-        local bestvideostatus, bestvideo, bestvideoerr = exec(command, true, true)
-        if bestvideostatus ~= 0 then
-            mp.set_osd_ass(0, 0, "")
-            mp.osd_message("Could not retieve bestvideo url:\n" ..ass0 .. "{\\fs8} " ..
-                bestvideo:gsub("\r", "") .."\n" ..
-                bestvideoerr:gsub("\r", "") .. ass1, 20)
-            msg.debug("bestvideo stdout:\n" .. bestvideo)
-            msg.debug("bestvideo stderr:\n" .. bestvideoerr)
-        end
-        msg.debug("bestvideo: " .. bestvideo)
-
-        -- Get the download url of the audio file
-        table.remove(command) -- remove bestvideo
-        table.insert(command, "bestaudio")  -- TODO custom format?
-        local bestaudiostatus, bestaudio, bestaudioerr = exec(command, true, true)
-        if bestaudiostatus ~= 0 then
-            mp.set_osd_ass(0, 0, "")
-            mp.osd_message("Could not retieve bestaudio url:\n" ..ass0 .. "{\\fs8} " ..
-                bestaudio:gsub("\r", "") .."\n" ..
-                bestaudioerr:gsub("\r", "") .. ass1, 20)
-            msg.debug("bestaudio stdout:\n" .. bestaudio)
-            msg.debug("bestaudio stderr:\n" .. bestaudioerr)
-        end
-        msg.debug("bestaudio: " .. bestaudio)
-
-        -- TODO download subtitles?
 
         start_time_seconds = math.floor(start_time_seconds)
         end_time_seconds = math.ceil(end_time_seconds)
@@ -299,9 +259,8 @@ local function download(download_type)
         local start_time_str = tostring(start_time_seconds)
         local end_time_str = tostring(end_time_seconds)
 
-        -- Get the file name of the video
+        -- Add time to the file name of the video
         local filename_format
-        rangeModeFilename = "out.mp4"
         -- Insert start time/end time
         if not_empty(opts.filename) then
             if opts.filename:find("%%%(start_time%)") ~= nil then
@@ -326,6 +285,8 @@ local function download(download_type)
             filename_format = "%(title)s-%(id)s." .. start_time_str .. "-" .. end_time_str .. ".%(ext)s"
         end
 
+        -- Get the download url of the video file
+        -- youtube-dl -g -f bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best -s --get-filename https://www.youtube.com/watch?v=kcGYk2OWQkY
         command = {"youtube-dl"}
         if opts.restrict_filenames then
             table.insert(command, "--restrict-filenames")
@@ -334,25 +295,89 @@ local function download(download_type)
             table.insert(command, "--cookies")
             table.insert(command, opts.cookies)
         end
+        table.insert(command, "-g")
+        table.insert(command, "--no-playlist")
         table.insert(command, "-f")
-        table.insert(command, "bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best")
+        table.insert(command, "bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best")  -- TODO custom formats?
         table.insert(command, "-o")
         table.insert(command, filename_format)
         table.insert(command, "-s")
         table.insert(command, "--get-filename")
         table.insert(command, url)
-        local status, filename_stdout, _ = exec(command, true, false)
-        if status == 0 then
-            filename_stdout = trim(filename_stdout)
-            if not_empty(filename_stdout) then
-                rangeModeFilename = filename_stdout
-            end
+
+        msg.debug("info exec: " .. table.concat(command, " "))
+        local info_status, info_stdout, info_stderr = exec(command, true, true)
+        if info_status ~= 0 then
+            mp.set_osd_ass(0, 0, "")
+            mp.osd_message("Could not retieve download stream url: status=" .. tostring(info_status) .. "\n" ..
+                ass0 .. "{\\fs8} " .. info_stdout:gsub("\r", "") .."\n" .. info_stderr:gsub("\r", "") .. ass1, 20)
+            msg.debug("info_stdout:\n" .. info_stdout)
+            msg.debug("info_stderr:\n" .. info_stderr)
+            mp.set_osd_ass(0, 0, "")
+            return
         end
-        if rangeModeFilename == "out.mp4" and url:find("youtube") ~=nil and url:find("=") ~=nil then
-            rangeModeFilename = "v_" .. url:sub(url:find("=") + 1) ..
-                "." .. start_time_str .. "-" .. end_time_str .. ".mp4"
-        elseif rangeModeFilename == "out.mp4" then
-            rangeModeFilename = "out." .. start_time_str .. "-" .. end_time_str .. ".mp4"
+
+        -- Split result into lines
+        local info_lines = {}
+        local last_index = 0
+        local info_lines_N = 0
+        while true do
+            local start_i, end_i = info_stdout:find("\n", last_index, true)
+            if start_i then
+                local line = tostring(trim(info_stdout:sub(last_index, start_i)))
+                if line ~= "" then
+                    table.insert(info_lines, line)
+                    info_lines_N = info_lines_N + 1
+                end
+            else
+                break
+            end
+            last_index = end_i + 1
+        end
+
+        if info_lines_N < 2 then
+            mp.set_osd_ass(0, 0, "")
+            mp.osd_message("Could not extract download stream urls and filename from output\n" ..
+                ass0 .. "{\\fs8} " .. info_stdout:gsub("\r", "") .."\n" .. info_stderr:gsub("\r", "") .. ass1, 20)
+            msg.debug("info_stdout:\n" .. info_stdout)
+            msg.debug("info_stderr:\n" .. info_stderr)
+            mp.set_osd_ass(0, 0, "")
+            return
+        end
+        rangeModeFilename = info_lines[info_lines_N]
+        table.remove(info_lines)
+
+        local subtitle_filename = nil
+        if download_type == DOWNLOAD.VIDEO_EMBED_SUBTITLE then
+            -- youtube-dl --write-sub --skip-download  https://www.youtube.com/watch?v=tAeJYNojGCY -o "temp.%(ext)s"
+            command = {"youtube-dl", "--write-sub", "--skip-download", "--sub-lang", opts.sub_lang}
+            if not_empty(opts.sub_format) then
+                table.insert(command, "--sub-format")
+                table.insert(command, opts.sub_format)
+            end
+            local randomName = "tmp_" .. tostring(math.random())
+            table.insert(command, "-o")
+            table.insert(command, randomName .. ".%(ext)s")
+            table.insert(command, url)
+
+            -- Start subtitle download
+            msg.debug("exec: " .. table.concat(command, " "))
+            local subtitle_status, subtitle_stdout, subtitle_stderr = exec(command, true, true)
+            if subtitle_status == 0 and subtitle_stdout:find(randomName) then
+                local i, j = subtitle_stdout:find(randomName .. "[^\n]+")
+                subtitle_filename = trim(subtitle_stdout:sub(i, j))
+                if subtitle_filename ~= "" then
+                    if rangeModeFilename:sub(-4) ~= ".mkv" then
+                        -- Only mkv supports all kinds of subtitle formats
+                        rangeModeFilename = rangeModeFilename:sub(1,-4) .. "mkv"
+                    end
+                end
+            else
+                mp.osd_message("Could not find a suitable subtitle")
+                msg.debug("subtitle_stdout:\n" .. subtitle_stdout)
+                msg.debug("subtitle_stderr:\n" .. subtitle_stderr)
+            end
+
         end
 
         -- Download earlier (cut off afterwards)
@@ -365,24 +390,27 @@ local function download(download_type)
         command = {}
         table.insert(command, "ffmpeg")
         table.insert(command, "-y")
-        table.insert(command, "-ss")
-        table.insert(command, start_time_str)
-        table.insert(command, "-to")
-        table.insert(command, end_time_str)
-        table.insert(command, "-i")
-        table.insert(command, bestvideo)
-        table.insert(command, "-ss")
-        table.insert(command, start_time_str)
-        table.insert(command, "-to")
-        table.insert(command, end_time_str)
-        table.insert(command, "-i")
-        table.insert(command, bestaudio)
+        for _, value in ipairs(info_lines) do
+            table.insert(command, "-ss")
+            table.insert(command, start_time_str)
+            table.insert(command, "-to")
+            table.insert(command, end_time_str)
+            table.insert(command, "-i")
+            table.insert(command, value)
+        end
+        if not_empty(subtitle_filename) then
+            table.insert(command, "-ss")
+            table.insert(command, start_time_str)
+            table.insert(command, "-i")
+            table.insert(command, subtitle_filename)
+            table.insert(command, "-to") -- To must be after input for subtitle
+            table.insert(command, end_time_str)
+        end
         table.insert(command, "-c")
         table.insert(command, "copy")
         table.insert(command, "-avoid_negative_ts")
         table.insert(command, "make_zero")
         table.insert(command, rangeModeFilename)
-
 
         select_range_mode = 0
     end
