@@ -135,6 +135,18 @@ local end_time_seconds = nil
 local end_time_formated = nil
 
 local is_downloading = false
+
+local function disable_select_range()
+    -- Disable range mode
+    select_range_mode = 0
+    -- Remove the arrow key key bindings
+    mp.remove_key_binding("select-range-set-up")
+    mp.remove_key_binding("select-range-set-down")
+    mp.remove_key_binding("select-range-set-left")
+    mp.remove_key_binding("select-range-set-right")
+end
+
+
 local function download(download_type)
     local start_time = os.date("%c")
     msg.verbose("download()")
@@ -179,10 +191,11 @@ local function download(download_type)
     -- Compose command line arguments
     local command = {}
 
-    local rangeModeFilename = nil
+    local range_mode_file_name = nil
+    local range_mode_subtitle_file_name = nil
     local start_time_offset = 0
 
-    if select_range_mode == 0 then
+    if select_range_mode == 0 or (select_range_mode > 0 and (download_type == DOWNLOAD.AUDIO or download_type == DOWNLOAD.SUBTITLE)) then
         table.insert(command, "youtube-dl")
         table.insert(command, "--no-overwrites")
         if opts.restrict_filenames then
@@ -209,6 +222,11 @@ local function download(download_type)
                 table.insert(command, "--sub-format")
                 table.insert(command, opts.sub_format)
             end
+            if select_range_mode > 0 then
+                mp.osd_message("Range mode is not available for subtitle-only download", 10)
+                is_downloading = false
+                return
+            end
         elseif download_type == DOWNLOAD.AUDIO then
             table.insert(command, "--extract-audio")
             if not_empty(opts.audio_format) then
@@ -218,6 +236,14 @@ local function download(download_type)
             if not_empty(opts.audio_quality) then
               table.insert(command, "--audio-quality")
               table.insert(command, opts.audio_quality)
+            end
+            if  select_range_mode > 0 then
+                local start_time_str = tostring(start_time_seconds)
+                local end_time_str = tostring(end_time_seconds)
+                table.insert(command, "--external-downloader")
+                table.insert(command, "ffmpeg")
+                table.insert(command, "--external-downloader-args")
+                table.insert(command, "-ss ".. start_time_str .. " -to " .. end_time_str .. " -avoid_negative_ts make_zero")
             end
         else --DOWNLOAD.VIDEO or DOWNLOAD.VIDEO_EMBED_SUBTITLE
             if download_type == DOWNLOAD.VIDEO_EMBED_SUBTITLE then
@@ -244,11 +270,8 @@ local function download(download_type)
         end
         table.insert(command, url)
 
-    elseif select_range_mode > 0 then
-        -- TODO only do this for formats where it is necessary.
-        --      For -f best it is not necessary, we can use the old version for -f best
-        -- TODO for only audio we also need the old version
-        -- TODO for subtitle only: download whole subtitle
+    elseif select_range_mode > 0 and
+        (download_type == DOWNLOAD.VIDEO or download_type == DOWNLOAD.VIDEO_EMBED_SUBTITLE) then
 
         -- Show download indicator
         mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔗")
@@ -285,8 +308,25 @@ local function download(download_type)
             filename_format = "%(title)s-%(id)s." .. start_time_str .. "-" .. end_time_str .. ".%(ext)s"
         end
 
+        -- Find a suitable format
+        local format = "bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best"
+        if opts.video_format == nil or opts.video_format == "" then
+            format = format
+        elseif opts.video_format == "best" then
+            -- "best" works, because its a single file stream
+            format = "best"
+        elseif opts.video_format:find("mp4") ~= nil then
+            -- probably a mp4 format, so use it
+            format = opts.video_format
+        else
+            -- custom format, no "mp4" found -> use default
+            msg.warn("Select range mode requires a .mp4 format or \"best\", found "  ..
+                    opts.video_format ..
+                    "\nUsing default format instead: " .. format)
+        end
+
         -- Get the download url of the video file
-        -- youtube-dl -g -f bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best -s --get-filename https://www.youtube.com/watch?v=kcGYk2OWQkY
+        -- e.g.: youtube-dl -g -f bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best -s --get-filename https://www.youtube.com/watch?v=abcdefg
         command = {"youtube-dl"}
         if opts.restrict_filenames then
             table.insert(command, "--restrict-filenames")
@@ -298,7 +338,7 @@ local function download(download_type)
         table.insert(command, "-g")
         table.insert(command, "--no-playlist")
         table.insert(command, "-f")
-        table.insert(command, "bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best")  -- TODO custom formats?
+        table.insert(command, format)
         table.insert(command, "-o")
         table.insert(command, filename_format)
         table.insert(command, "-s")
@@ -314,6 +354,7 @@ local function download(download_type)
             msg.debug("info_stdout:\n" .. info_stdout)
             msg.debug("info_stderr:\n" .. info_stderr)
             mp.set_osd_ass(0, 0, "")
+            is_downloading = false
             return
         end
 
@@ -342,14 +383,14 @@ local function download(download_type)
             msg.debug("info_stdout:\n" .. info_stdout)
             msg.debug("info_stderr:\n" .. info_stderr)
             mp.set_osd_ass(0, 0, "")
+            is_downloading = false
             return
         end
-        rangeModeFilename = info_lines[info_lines_N]
+        range_mode_file_name = info_lines[info_lines_N]
         table.remove(info_lines)
 
-        local subtitle_filename = nil
         if download_type == DOWNLOAD.VIDEO_EMBED_SUBTITLE then
-            -- youtube-dl --write-sub --skip-download  https://www.youtube.com/watch?v=tAeJYNojGCY -o "temp.%(ext)s"
+            -- youtube-dl --write-sub --skip-download  https://www.youtube.com/watch?v=abcdefg -o "temp.%(ext)s"
             command = {"youtube-dl", "--write-sub", "--skip-download", "--sub-lang", opts.sub_lang}
             if not_empty(opts.sub_format) then
                 table.insert(command, "--sub-format")
@@ -365,11 +406,11 @@ local function download(download_type)
             local subtitle_status, subtitle_stdout, subtitle_stderr = exec(command, true, true)
             if subtitle_status == 0 and subtitle_stdout:find(randomName) then
                 local i, j = subtitle_stdout:find(randomName .. "[^\n]+")
-                subtitle_filename = trim(subtitle_stdout:sub(i, j))
-                if subtitle_filename ~= "" then
-                    if rangeModeFilename:sub(-4) ~= ".mkv" then
+                range_mode_subtitle_file_name = trim(subtitle_stdout:sub(i, j))
+                if range_mode_subtitle_file_name ~= "" then
+                    if range_mode_file_name:sub(-4) ~= ".mkv" then
                         -- Only mkv supports all kinds of subtitle formats
-                        rangeModeFilename = rangeModeFilename:sub(1,-4) .. "mkv"
+                        range_mode_file_name = range_mode_file_name:sub(1,-4) .. "mkv"
                     end
                 end
             else
@@ -381,7 +422,7 @@ local function download(download_type)
         end
 
         -- Download earlier (cut off afterwards)
-        start_time_offset = math.min(7, start_time_seconds)
+        start_time_offset = math.min(10, start_time_seconds)
         start_time_seconds = start_time_seconds - start_time_offset
 
         start_time_str = tostring(start_time_seconds)
@@ -398,11 +439,11 @@ local function download(download_type)
             table.insert(command, "-i")
             table.insert(command, value)
         end
-        if not_empty(subtitle_filename) then
+        if not_empty(range_mode_subtitle_file_name) then
             table.insert(command, "-ss")
             table.insert(command, start_time_str)
             table.insert(command, "-i")
-            table.insert(command, subtitle_filename)
+            table.insert(command, range_mode_subtitle_file_name)
             table.insert(command, "-to") -- To must be after input for subtitle
             table.insert(command, end_time_str)
         end
@@ -410,9 +451,9 @@ local function download(download_type)
         table.insert(command, "copy")
         table.insert(command, "-avoid_negative_ts")
         table.insert(command, "make_zero")
-        table.insert(command, rangeModeFilename)
+        table.insert(command, range_mode_file_name)
 
-        select_range_mode = 0
+        disable_select_range()
     end
 
     -- Show download indicator
@@ -422,16 +463,18 @@ local function download(download_type)
     msg.debug("exec: " .. table.concat(command, " "))
     local status, stdout, stderr = exec(command, true, true)
 
-    if status == 0 and rangeModeFilename ~= nil then
+    if status == 0 and range_mode_file_name ~= nil then
         mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔨")
 
         -- Cut first few seconds to fix errors
-        local start_time_offset_str = tostring(start_time_offset)
-        if #start_time_offset_str == 1 then
-            start_time_offset_str = "0" .. start_time_offset_str
-        end
-        command = {"ffmpeg", "-y", "-ss", "00:00:".. start_time_offset_str, "-i", rangeModeFilename,
-            "-avoid_negative_ts", "make_zero", "-c", "copy", "tmp." .. rangeModeFilename}
+        --local start_time_offset_str = tostring(start_time_offset)
+        --if #start_time_offset_str == 1 then
+        --    start_time_offset_str = "0" .. start_time_offset_str
+        --end
+        local max_length = end_time_seconds - start_time_seconds + start_time_offset + 12
+        local tmp_file_name = range_mode_file_name .. "tmp." .. range_mode_file_name:sub(-3)
+        command = {"ffmpeg", "-y", "-seek_timestamp", "1", "-i", range_mode_file_name, "-ss", "00:00:00",
+            "-c", "copy", "-avoid_negative_ts", "make_zero", "-t", tostring(max_length), tmp_file_name}
         msg.debug("mux exec: " .. table.concat(command, " "))
         local muxstatus, muxstdout, muxstderr = exec(command, true, true)
         if muxstatus ~= 0 and not_empty(muxstderr) then
@@ -439,8 +482,11 @@ local function download(download_type)
             msg.warn("Remux errorlog:" .. tostring(muxstderr))
         end
         if muxstatus == 0 then
-            os.remove(rangeModeFilename)
-            os.rename("tmp." .. rangeModeFilename, rangeModeFilename)
+            os.remove(range_mode_file_name)
+            os.rename(tmp_file_name, range_mode_file_name)
+            if not_empty(range_mode_subtitle_file_name) then
+                os.remove(range_mode_subtitle_file_name)
+            end
         end
 
     end
@@ -484,7 +530,7 @@ local function download(download_type)
 
     -- Retrieve the file name
     local filename = nil
-    if rangeModeFilename == nil and stdout then
+    if range_mode_file_name == nil and stdout then
         local i, j, last_i, start_index = 0
         while i ~= nil do
             last_i, start_index = i, j
@@ -497,8 +543,8 @@ local function download(download_type)
             filename = trim(stdout:sub(start_index, end_index))
            end
         end
-    elseif not_empty(rangeModeFilename) then
-        filename = rangeModeFilename
+    elseif not_empty(range_mode_file_name) then
+        filename = range_mode_file_name
     end
 
     local osd_text = "Download succeeded\n"
@@ -633,16 +679,12 @@ local function select_range_set_right()
     select_range_show()
 end
 
+
 local function select_range()
     -- Cycle through modes
     if select_range_mode == 2 then
         -- Disable range mode
-        select_range_mode = 0
-        -- Remove the arrow key key bindings
-        mp.remove_key_binding("select-range-set-up")
-        mp.remove_key_binding("select-range-set-down")
-        mp.remove_key_binding("select-range-set-left")
-        mp.remove_key_binding("select-range-set-right")
+        disable_select_range()
     elseif select_range_mode == 1 then
         -- Switch to "fine tune" mode
         select_range_mode = 2
