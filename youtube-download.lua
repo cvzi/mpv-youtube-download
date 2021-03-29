@@ -243,7 +243,7 @@ local function download(download_type)
                 table.insert(command, "--external-downloader")
                 table.insert(command, "ffmpeg")
                 table.insert(command, "--external-downloader-args")
-                table.insert(command, "-ss ".. start_time_str .. " -to " .. end_time_str .. " -avoid_negative_ts make_zero")
+                table.insert(command, "-loglevel warning -nostats -hide_banner -ss ".. start_time_str .. " -to " .. end_time_str .. " -avoid_negative_ts make_zero")
             end
         else --DOWNLOAD.VIDEO or DOWNLOAD.VIDEO_EMBED_SUBTITLE
             if download_type == DOWNLOAD.VIDEO_EMBED_SUBTITLE then
@@ -428,9 +428,7 @@ local function download(download_type)
         start_time_str = tostring(start_time_seconds)
         end_time_str = tostring(end_time_seconds)
 
-        command = {}
-        table.insert(command, "ffmpeg")
-        table.insert(command, "-y")
+        command = {"ffmpeg", "-loglevel", "warning", "-nostats", "-hide_banner", "-y"}
         for _, value in ipairs(info_lines) do
             table.insert(command, "-ss")
             table.insert(command, start_time_str)
@@ -472,8 +470,8 @@ local function download(download_type)
         --    start_time_offset_str = "0" .. start_time_offset_str
         --end
         local max_length = end_time_seconds - start_time_seconds + start_time_offset + 12
-        local tmp_file_name = range_mode_file_name .. "tmp." .. range_mode_file_name:sub(-3)
-        command = {"ffmpeg", "-y", "-seek_timestamp", "1", "-i", range_mode_file_name, "-ss", "00:00:00",
+        local tmp_file_name = range_mode_file_name .. ".tmp." .. range_mode_file_name:sub(-3)
+        command = {"ffmpeg", "-loglevel", "warning", "-nostats", "-hide_banner", "-y", "-seek_timestamp", "1", "-i", range_mode_file_name, "-ss", "00:00:00",
             "-c", "copy", "-avoid_negative_ts", "make_zero", "-t", tostring(max_length), tmp_file_name}
         msg.debug("mux exec: " .. table.concat(command, " "))
         local muxstatus, muxstdout, muxstderr = exec(command, true, true)
@@ -592,9 +590,9 @@ local function download(download_type)
         if stderr:find("incompatible for merge") == nil then
             local i = stderr:find("Input #")
             if i ~= nil then
-                stderr = stderr:sub(i):gsub("\r", "")
+                stderr = stderr:sub(i)
             end
-            osd_text = osd_text .. "\n" .. ass0 .. "{\\fs8} " .. stderr .. ass1
+            osd_text = osd_text .. "\n" .. ass0 .. "{\\fs8} " .. stderr:gsub("\r", "") .. ass1
             osd_time = osd_time + 5
         end
     end
