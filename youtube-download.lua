@@ -465,13 +465,14 @@ local function download(download_type)
         mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔨")
 
         -- Cut first few seconds to fix errors
-        --local start_time_offset_str = tostring(start_time_offset)
-        --if #start_time_offset_str == 1 then
-        --    start_time_offset_str = "0" .. start_time_offset_str
-        --end
+        local start_time_offset_str = tostring(start_time_offset)
+        if #start_time_offset_str == 1 then
+            start_time_offset_str = "0" .. start_time_offset_str
+        end
         local max_length = end_time_seconds - start_time_seconds + start_time_offset + 12
         local tmp_file_name = range_mode_file_name .. ".tmp." .. range_mode_file_name:sub(-3)
-        command = {"ffmpeg", "-loglevel", "warning", "-nostats", "-hide_banner", "-y", "-seek_timestamp", "1", "-i", range_mode_file_name, "-ss", "00:00:00",
+        command = {"ffmpeg", "-loglevel", "warning", "-nostats", "-hide_banner", "-y", "-seek_timestamp", "1",
+            "-i", range_mode_file_name, "-ss", "00:00:" .. start_time_offset_str,
             "-c", "copy", "-avoid_negative_ts", "make_zero", "-t", tostring(max_length), tmp_file_name}
         msg.debug("mux exec: " .. table.concat(command, " "))
         local muxstatus, muxstdout, muxstderr = exec(command, true, true)
