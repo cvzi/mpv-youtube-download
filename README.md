@@ -43,6 +43,21 @@ Add the following lines to the end of your `input.conf` (change the keys if they
 
 ```
 
+### Features and default keyboard shortcuts:
+
+*   CTRL + d : Download video
+*   CTRL + a : Download audio
+*   CTRL + s : Download subtitle
+*   CTRL + i : Download video with embedded subtitle
+*   CTRL + r : Select an interval of start/end time to download only a portion of a video
+    - Default interval: from current playing position til end
+    - Use arrow keys to select another interval
+    - Press CTRL + r again to fine tune second by second
+    - Start download with CTRL + d, CTRL + a, ...
+*   A download archive for youtube-dl can be set in the script configuration (disabled by default)
+*   Cookies are picked up from `--ytdl-raw-options` or can be specified in the script configuration (disabled by default)
+*   A log file for youtube-dl download errors can be set in the in the script configuration (disabled by default)
+
 ## Credit
 - I pretty much copied the [mpv-youtube-quality](https://github.com/jgreco/mpv-youtube-quality) script
 
