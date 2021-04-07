@@ -58,7 +58,6 @@ Add the following lines to the end of your `input.conf` (change the keys if they
 *   Cookies are picked up from `--ytdl-raw-options` or can be specified in the script configuration (disabled by default)
 *   A log file for youtube-dl download errors can be set in the in the script configuration (disabled by default)
 
-
 ## Credit
 - I pretty much copied the [mpv-youtube-quality](https://github.com/jgreco/mpv-youtube-quality) script
 
