@@ -31,6 +31,7 @@ local opts = {
 
     -- Same as youtube-dl --format FORMAT
     -- see https://github.com/ytdl-org/youtube-dl/blob/master/README.md#format-selection
+    -- set to "current" to download the same quality that is currently playing
     video_format = "",
 
     -- Encode the video to another format if necessary: "mp4", "flv", "ogg", "webm", "mkv", "avi"
@@ -122,6 +123,19 @@ local function path_join(...)
     return table.concat({...}, path_separator())
 end
 
+local function get_current_format()
+    -- get the current youtube-dl format or the default value
+    local ytdl_format = mp.get_property("options/ytdl-format")
+    if not_empty(ytdl_format) then
+        return  ytdl_format
+    end
+    ytdl_format = mp.get_property("ytdl-format")
+    if not_empty(ytdl_format) then
+        return ytdl_format
+    end
+    return "bestvideo+bestaudio/best"
+end
+
 local DOWNLOAD = {
     VIDEO=1,
     AUDIO=2,
@@ -149,12 +163,10 @@ end
 
 local function download(download_type)
     local start_time = os.date("%c")
-    msg.verbose("download()")
     if is_downloading then
         return
     end
     is_downloading = true
-    msg.verbose("download() aquired")
 
     local ass0 = mp.get_property("osd-ass-cc/0")
     local ass1 =  mp.get_property("osd-ass-cc/1")
@@ -257,7 +269,11 @@ local function download(download_type)
             end
             if not_empty(opts.video_format) then
               table.insert(command, "--format")
-              table.insert(command, opts.video_format)
+              if opts.video_format == "current" then
+                table.insert(command, get_current_format())
+              else
+                table.insert(command, opts.video_format)
+              end
             end
             if not_empty(opts.recode_video) then
               table.insert(command, "--recode-video")
@@ -310,18 +326,22 @@ local function download(download_type)
 
         -- Find a suitable format
         local format = "bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best"
-        if opts.video_format == nil or opts.video_format == "" then
+        local requested_format = opts.video_format
+        if requested_format == "current" then
+            requested_format = get_current_format()
+        end
+        if requested_format == nil or requested_format == "" then
             format = format
-        elseif opts.video_format == "best" then
+        elseif requested_format == "best" then
             -- "best" works, because its a single file stream
             format = "best"
-        elseif opts.video_format:find("mp4") ~= nil then
+        elseif requested_format:find("mp4") ~= nil then
             -- probably a mp4 format, so use it
-            format = opts.video_format
+            format = requested_format
         else
             -- custom format, no "mp4" found -> use default
             msg.warn("Select range mode requires a .mp4 format or \"best\", found "  ..
-                    opts.video_format ..
+            requested_format .. "\n(" .. opts.video_format .. ")" ..
                     "\nUsing default format instead: " .. format)
         end
 
@@ -515,8 +535,8 @@ local function download(download_type)
         mp.osd_message("download failed:\n" .. tostring(stderr), 10)
         msg.error("URL: " .. tostring(url))
         msg.error("Return status code: " .. tostring(status))
-        msg.verbose(tostring(stderr))
-        msg.verbose(tostring(stdout))
+        msg.debug(tostring(stderr))
+        msg.debug(tostring(stdout))
         return
     end
 
