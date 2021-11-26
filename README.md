@@ -49,6 +49,7 @@ Add the following lines to the end of your `input.conf` (change the keys if they
 *   CTRL + a : Download audio
 *   CTRL + s : Download subtitle
 *   CTRL + i : Download video with embedded subtitle
+*   To cancel a running download process, press any of the above key combinations **twice**
 *   CTRL + r : Select an interval of start/end time to download only a portion of a video
     - Default interval: from current playing position til end
     - Use arrow keys to select another interval
