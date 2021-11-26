@@ -104,6 +104,16 @@ local function exec(args, capture_stdout, capture_stderr)
     return ret.status, ret.stdout, ret.stderr, ret
 end
 
+local function exec_async(args, capture_stdout, capture_stderr, callback)
+    return mp.command_native_async({
+        name = "subprocess",
+        playback_only = false,
+        capture_stdout = capture_stdout,
+        capture_stderr = capture_stderr,
+        args = args,
+    }, callback)
+end
+
 local function trim(str)
     return str:gsub("^%s+", ""):gsub("%s+$", "")
 end
@@ -149,6 +159,9 @@ local end_time_seconds = nil
 local end_time_formated = nil
 
 local is_downloading = false
+local process_id = nil
+local should_cancel = false
+
 
 local function disable_select_range()
     -- Disable range mode
@@ -164,9 +177,19 @@ end
 local function download(download_type)
     local start_time = os.date("%c")
     if is_downloading then
+        if process_id ~= nil and should_cancel then
+            -- cancel here
+            mp.osd_message("Canceling download ...", 3)
+            mp.abort_async_command(process_id)
+            should_cancel = false
+        elseif process_id ~= nil then
+            should_cancel = true
+            mp.osd_message("Download in progress. Press again to cancel download", 5)
+        end
         return
     end
     is_downloading = true
+    should_cancel = false
 
     local ass0 = mp.get_property("osd-ass-cc/0")
     local ass1 =  mp.get_property("osd-ass-cc/1")
@@ -475,148 +498,158 @@ local function download(download_type)
     -- Show download indicator
     mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛💾")
 
+    -- Callback
+    local function download_ended(success, ret, error)
+        local stdout = ret.stdout
+        local stderr = ret.stderr
+        local status = ret.status
+
+        process_id = nil
+
+        if status == 0 and range_mode_file_name ~= nil then
+            mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔨")
+
+            -- Cut first few seconds to fix errors
+            local start_time_offset_str = tostring(start_time_offset)
+            if #start_time_offset_str == 1 then
+                start_time_offset_str = "0" .. start_time_offset_str
+            end
+            local max_length = end_time_seconds - start_time_seconds + start_time_offset + 12
+            local tmp_file_name = range_mode_file_name .. ".tmp." .. range_mode_file_name:sub(-3)
+            command = {"ffmpeg", "-loglevel", "warning", "-nostats", "-hide_banner", "-y",
+                "-i", range_mode_file_name, "-ss", "00:00:" .. start_time_offset_str,
+                "-c", "copy", "-avoid_negative_ts", "make_zero", "-t", tostring(max_length), tmp_file_name}
+            msg.debug("mux exec: " .. table.concat(command, " "))
+            local muxstatus, muxstdout, muxstderr = exec(command, true, true)
+            if muxstatus ~= 0 and not_empty(muxstderr) then
+                msg.warn("Remux log:" .. tostring(muxstdout))
+                msg.warn("Remux errorlog:" .. tostring(muxstderr))
+            end
+            if muxstatus == 0 then
+                os.remove(range_mode_file_name)
+                os.rename(tmp_file_name, range_mode_file_name)
+                if not_empty(range_mode_subtitle_file_name) then
+                    os.remove(range_mode_subtitle_file_name)
+                end
+            end
+
+        end
+
+
+        is_downloading = false
+
+        -- Hide download indicator
+        mp.set_osd_ass(0, 0, "")
+
+        local wrote_error_log = false
+        if stderr ~= nil and not_empty(opts.log_file) and not_empty(stderr) then
+            -- Write stderr to log file
+            local title = mp.get_property("media-title")
+            local file = io.open (opts.log_file , "a+")
+            file:write("\n[")
+            file:write(start_time)
+            file:write("] ")
+            file:write(url)
+            file:write("\n[\"")
+            file:write(title)
+            file:write("\"]\n")
+            file:write(stderr)
+            file:close()
+            wrote_error_log = true
+        end
+
+        if (status ~= 0) then
+            mp.osd_message("download failed:\n" .. tostring(stderr), 10)
+            msg.error("URL: " .. tostring(url))
+            msg.error("Return status code: " .. tostring(status))
+            msg.debug(tostring(stderr))
+            msg.debug(tostring(stdout))
+            return
+        end
+
+        if string.find(stdout, "has already been recorded in archive") ~=nil then
+            mp.osd_message("Has already been recorded in archive", 5)
+            return
+        end
+
+        -- Retrieve the file name
+        local filename = nil
+        if range_mode_file_name == nil and stdout then
+            local i, j, last_i, start_index = 0
+            while i ~= nil do
+                last_i, start_index = i, j
+                i, j = stdout:find ("Destination: ",j, true)
+            end
+
+            if last_i ~= nil then
+              local end_index = stdout:find ("\n", start_index, true)
+              if end_index ~= nil and start_index ~= nil then
+                filename = trim(stdout:sub(start_index, end_index))
+               end
+            end
+        elseif not_empty(range_mode_file_name) then
+            filename = range_mode_file_name
+        end
+
+        local osd_text = "Download succeeded\n"
+        local osd_time = 5
+        -- Find filename or directory
+        if filename then
+            local filepath
+            local basepath
+            if filename:find("/") == nil and filename:find("\\") == nil then
+              basepath = utils.getcwd()
+              filepath = path_join(utils.getcwd(), filename)
+            else
+              basepath = ""
+              filepath = filename
+            end
+
+            if filepath:len() < 100 then
+                osd_text = osd_text .. ass0 .. "{\\fs12} " .. filepath .. " {\\fs20}" .. ass1
+            elseif basepath == "" then
+                osd_text = osd_text .. ass0 .. "{\\fs8} " .. filepath .. " {\\fs20}" .. ass1
+            else
+                osd_text = osd_text .. ass0 .. "{\\fs11} " .. basepath .. "\n" .. filename .. " {\\fs20}" ..  ass1
+            end
+            if wrote_error_log then
+                -- Write filename and end time to log file
+                local file = io.open (opts.log_file , "a+")
+                file:write("[" .. filepath .. "]\n")
+                file:write(os.date("[end %c]\n"))
+                file:close()
+            end
+        else
+            if wrote_error_log then
+                -- Write directory and end time to log file
+                local file = io.open (opts.log_file , "a+")
+                file:write("[" .. utils.getcwd() .. "]\n")
+                file:write(os.date("[end %c]\n"))
+                file:close()
+            end
+            osd_text = osd_text .. utils.getcwd()
+        end
+
+        -- Show warnings
+        if not_empty(stderr) then
+            msg.warn("Errorlog:" .. tostring(stderr))
+            if stderr:find("incompatible for merge") == nil then
+                local i = stderr:find("Input #")
+                if i ~= nil then
+                    stderr = stderr:sub(i)
+                end
+                osd_text = osd_text .. "\n" .. ass0 .. "{\\fs8} " .. stderr:gsub("\r", "") .. ass1
+                osd_time = osd_time + 5
+            end
+        end
+
+        mp.osd_message(osd_text, osd_time)
+    end
+
     -- Start download
-    msg.debug("exec: " .. table.concat(command, " "))
-    local status, stdout, stderr = exec(command, true, true)
+    msg.debug("exec (async): " .. table.concat(command, " "))
+    process_id = exec_async(command, true, true, download_ended)
 
-    if status == 0 and range_mode_file_name ~= nil then
-        mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔨")
-
-        -- Cut first few seconds to fix errors
-        local start_time_offset_str = tostring(start_time_offset)
-        if #start_time_offset_str == 1 then
-            start_time_offset_str = "0" .. start_time_offset_str
-        end
-        local max_length = end_time_seconds - start_time_seconds + start_time_offset + 12
-        local tmp_file_name = range_mode_file_name .. ".tmp." .. range_mode_file_name:sub(-3)
-        command = {"ffmpeg", "-loglevel", "warning", "-nostats", "-hide_banner", "-y",
-            "-i", range_mode_file_name, "-ss", "00:00:" .. start_time_offset_str,
-            "-c", "copy", "-avoid_negative_ts", "make_zero", "-t", tostring(max_length), tmp_file_name}
-        msg.debug("mux exec: " .. table.concat(command, " "))
-        local muxstatus, muxstdout, muxstderr = exec(command, true, true)
-        if muxstatus ~= 0 and not_empty(muxstderr) then
-            msg.warn("Remux log:" .. tostring(muxstdout))
-            msg.warn("Remux errorlog:" .. tostring(muxstderr))
-        end
-        if muxstatus == 0 then
-            os.remove(range_mode_file_name)
-            os.rename(tmp_file_name, range_mode_file_name)
-            if not_empty(range_mode_subtitle_file_name) then
-                os.remove(range_mode_subtitle_file_name)
-            end
-        end
-
-    end
-
-
-    is_downloading = false
-
-    -- Hide download indicator
-    mp.set_osd_ass(0, 0, "")
-
-    local wrote_error_log = false
-    if stderr ~= nil and not_empty(opts.log_file) and not_empty(stderr) then
-        -- Write stderr to log file
-        local title = mp.get_property("media-title")
-        local file = io.open (opts.log_file , "a+")
-        file:write("\n[")
-        file:write(start_time)
-        file:write("] ")
-        file:write(url)
-        file:write("\n[\"")
-        file:write(title)
-        file:write("\"]\n")
-        file:write(stderr)
-        file:close()
-        wrote_error_log = true
-    end
-
-    if (status ~= 0) then
-        mp.osd_message("download failed:\n" .. tostring(stderr), 10)
-        msg.error("URL: " .. tostring(url))
-        msg.error("Return status code: " .. tostring(status))
-        msg.debug(tostring(stderr))
-        msg.debug(tostring(stdout))
-        return
-    end
-
-    if string.find(stdout, "has already been recorded in archive") ~=nil then
-        mp.osd_message("Has already been recorded in archive", 5)
-        return
-    end
-
-    -- Retrieve the file name
-    local filename = nil
-    if range_mode_file_name == nil and stdout then
-        local i, j, last_i, start_index = 0
-        while i ~= nil do
-            last_i, start_index = i, j
-            i, j = stdout:find ("Destination: ",j, true)
-        end
-
-        if last_i ~= nil then
-          local end_index = stdout:find ("\n", start_index, true)
-          if end_index ~= nil and start_index ~= nil then
-            filename = trim(stdout:sub(start_index, end_index))
-           end
-        end
-    elseif not_empty(range_mode_file_name) then
-        filename = range_mode_file_name
-    end
-
-    local osd_text = "Download succeeded\n"
-    local osd_time = 5
-    -- Find filename or directory
-    if filename then
-        local filepath
-        local basepath
-        if filename:find("/") == nil and filename:find("\\") == nil then
-          basepath = utils.getcwd()
-          filepath = path_join(utils.getcwd(), filename)
-        else
-          basepath = ""
-          filepath = filename
-        end
-
-        if filepath:len() < 100 then
-            osd_text = osd_text .. ass0 .. "{\\fs12} " .. filepath .. " {\\fs20}" .. ass1
-        elseif basepath == "" then
-            osd_text = osd_text .. ass0 .. "{\\fs8} " .. filepath .. " {\\fs20}" .. ass1
-        else
-            osd_text = osd_text .. ass0 .. "{\\fs11} " .. basepath .. "\n" .. filename .. " {\\fs20}" ..  ass1
-        end
-        if wrote_error_log then
-            -- Write filename and end time to log file
-            local file = io.open (opts.log_file , "a+")
-            file:write("[" .. filepath .. "]\n")
-            file:write(os.date("[end %c]\n"))
-            file:close()
-        end
-    else
-        if wrote_error_log then
-            -- Write directory and end time to log file
-            local file = io.open (opts.log_file , "a+")
-            file:write("[" .. utils.getcwd() .. "]\n")
-            file:write(os.date("[end %c]\n"))
-            file:close()
-        end
-        osd_text = osd_text .. utils.getcwd()
-    end
-
-    -- Show warnings
-    if not_empty(stderr) then
-        msg.warn("Errorlog:" .. tostring(stderr))
-        if stderr:find("incompatible for merge") == nil then
-            local i = stderr:find("Input #")
-            if i ~= nil then
-                stderr = stderr:sub(i)
-            end
-            osd_text = osd_text .. "\n" .. ass0 .. "{\\fs8} " .. stderr:gsub("\r", "") .. ass1
-            osd_time = osd_time + 5
-        end
-    end
-
-    mp.osd_message(osd_text, osd_time)
 end
 
 local function select_range_show()
