@@ -161,6 +161,7 @@ local end_time_formated = nil
 local is_downloading = false
 local process_id = nil
 local should_cancel = false
+local was_cancelled = false
 
 
 local function disable_select_range()
@@ -180,6 +181,7 @@ local function download(download_type)
         if process_id ~= nil and should_cancel then
             -- cancel here
             mp.osd_message("Canceling download ...", 3)
+            was_cancelled = true
             mp.abort_async_command(process_id)
             should_cancel = false
         elseif process_id ~= nil then
@@ -190,6 +192,7 @@ local function download(download_type)
     end
     is_downloading = true
     should_cancel = false
+    was_cancelled = false
 
     local ass0 = mp.get_property("osd-ass-cc/0")
     local ass1 =  mp.get_property("osd-ass-cc/1")
@@ -504,6 +507,9 @@ local function download(download_type)
         local stderr = ret.stderr
         local status = ret.status
 
+        msg.error("\nstdout: " .. tostring(stdout))
+        msg.error("\nstderr: " .. tostring(stderr) .. "\n")
+
         process_id = nil
 
         if status == 0 and range_mode_file_name ~= nil then
@@ -558,20 +564,6 @@ local function download(download_type)
             wrote_error_log = true
         end
 
-        if (status ~= 0) then
-            mp.osd_message("download failed:\n" .. tostring(stderr), 10)
-            msg.error("URL: " .. tostring(url))
-            msg.error("Return status code: " .. tostring(status))
-            msg.debug(tostring(stderr))
-            msg.debug(tostring(stdout))
-            return
-        end
-
-        if string.find(stdout, "has already been recorded in archive") ~=nil then
-            mp.osd_message("Has already been recorded in archive", 5)
-            return
-        end
-
         -- Retrieve the file name
         local filename = nil
         if range_mode_file_name == nil and stdout then
@@ -589,6 +581,27 @@ local function download(download_type)
             end
         elseif not_empty(range_mode_file_name) then
             filename = range_mode_file_name
+        end
+
+        if (status ~= 0) then
+            if was_cancelled then
+                mp.osd_message("Download cancelled!", 2)
+                if filename ~= nil then
+                    os.remove(filename .. '.part')
+                end
+            else
+                mp.osd_message("download failed:\n" .. tostring(stderr), 10)
+            end
+            msg.error("URL: " .. tostring(url))
+            msg.error("Return status code: " .. tostring(status))
+            msg.debug(tostring(stderr))
+            msg.debug(tostring(stdout))
+            return
+        end
+
+        if string.find(stdout, "has already been recorded in archive") ~=nil then
+            mp.osd_message("Has already been recorded in archive", 5)
+            return
         end
 
         local osd_text = "Download succeeded\n"
