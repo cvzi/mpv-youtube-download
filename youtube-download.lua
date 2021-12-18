@@ -79,19 +79,10 @@ local opts = {
     -- Log file for download errors
     log_file = "",
 
+    -- Executable of youtube-dl to use, e.g. "youtube-dl", "yt-dlp" or path to the executable file
+    -- Set to "" to auto-detect the executable
+    youtube_dl_exe = "",
 }
-
---Read configuration file
-(require 'mp.options').read_options(opts, "youtube-download")
-
---Read command line arguments
-local ytdl_raw_options = mp.get_property("ytdl-raw-options")
-if ytdl_raw_options ~= nil and ytdl_raw_options:find("cookies=") ~= nil then
-    local cookie_file = ytdl_raw_options:match("cookies=([^,]+)")
-    if cookie_file ~= nil then
-        opts.cookies = cookie_file
-    end
-end
 
 local function exec(args, capture_stdout, capture_stderr)
     local ret = mp.command_native({
@@ -144,6 +135,44 @@ local function get_current_format()
         return ytdl_format
     end
     return "bestvideo+bestaudio/best"
+end
+
+
+--Read configuration file
+(require 'mp.options').read_options(opts, "youtube-download")
+
+--Read command line arguments
+local ytdl_raw_options = mp.get_property("ytdl-raw-options")
+if ytdl_raw_options ~= nil and ytdl_raw_options:find("cookies=") ~= nil then
+    local cookie_file = ytdl_raw_options:match("cookies=([^,]+)")
+    if cookie_file ~= nil then
+        opts.cookies = cookie_file
+    end
+end
+
+--Try to detect youtube-dl/yt-dlp executable
+local executables = {"yt-dlp", "youtube-dl", "yt-dlp_x86", "yt-dlp_macos", "yt-dlp_min", "yt-dlc"}
+local function detect_executable()
+    local function detect_executable_callback(success, ret, _)
+        if not success or ret.status ~= 0 then
+            detect_executable()
+        else
+            msg.debug("Found working executable " .. opts.youtube_dl_exe)
+        end
+    end
+    opts.youtube_dl_exe = table.remove(executables, 1)
+    if opts.youtube_dl_exe ~= nil then
+        msg.debug("Trying executable '" .. opts.youtube_dl_exe .. "' ...")
+        exec_async({opts.youtube_dl_exe, "--version"}, false, false, detect_executable_callback)
+    else
+        msg.error("No working executable found, using fallback 'youtube-dl'")
+        opts.youtube_dl_exe = "youtube-dl"
+    end
+end
+
+if not not_empty(opts.youtube_dl_exe) then
+    msg.debug("Trying to detect executable...")
+    detect_executable()
 end
 
 local DOWNLOAD = {
@@ -234,7 +263,7 @@ local function download(download_type)
     local start_time_offset = 0
 
     if select_range_mode == 0 or (select_range_mode > 0 and (download_type == DOWNLOAD.AUDIO or download_type == DOWNLOAD.SUBTITLE)) then
-        table.insert(command, "youtube-dl")
+        table.insert(command, opts.youtube_dl_exe)
         table.insert(command, "--no-overwrites")
         if opts.restrict_filenames then
           table.insert(command, "--restrict-filenames")
@@ -373,7 +402,7 @@ local function download(download_type)
 
         -- Get the download url of the video file
         -- e.g.: youtube-dl -g -f bestvideo[ext*=mp4]+bestaudio/best[ext*=mp4]/best -s --get-filename https://www.youtube.com/watch?v=abcdefg
-        command = {"youtube-dl"}
+        command = {opts.youtube_dl_exe}
         if opts.restrict_filenames then
             table.insert(command, "--restrict-filenames")
         end
@@ -437,7 +466,7 @@ local function download(download_type)
 
         if download_type == DOWNLOAD.VIDEO_EMBED_SUBTITLE then
             -- youtube-dl --write-sub --skip-download  https://www.youtube.com/watch?v=abcdefg -o "temp.%(ext)s"
-            command = {"youtube-dl", "--write-sub", "--skip-download", "--sub-lang", opts.sub_lang}
+            command = {opts.youtube_dl_exe, "--write-sub", "--skip-download", "--sub-lang", opts.sub_lang}
             if not_empty(opts.sub_format) then
                 table.insert(command, "--sub-format")
                 table.insert(command, opts.sub_format)
@@ -506,9 +535,6 @@ local function download(download_type)
         local stdout = ret.stdout
         local stderr = ret.stderr
         local status = ret.status
-
-        msg.error("\nstdout: " .. tostring(stdout))
-        msg.error("\nstderr: " .. tostring(stderr) .. "\n")
 
         process_id = nil
 

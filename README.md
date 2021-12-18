@@ -21,7 +21,7 @@ The location of the scripts directory on Windows is `%APPDATA%\mpv\scripts` e.g.
 The location of the .conf files on Windows is `%APPDATA%\mpv\script-opts`
 
 On windows, you need to [add the directory of the ffmpeg.exe to your machine's %PATH](https://stackoverflow.com/a/41895179/10367381)
-or put the ffmpeg.exe in the same directory as the youtube-dl.exe.
+or put the ffmpeg.exe in the same directory as the youtube-dl.exe/yt-dlp.
 
 ### mpv.net:
 The script folder for mpv.net is:
@@ -58,6 +58,7 @@ Add the following lines to the end of your `input.conf` (change the keys if they
 *   A download archive for youtube-dl can be set in the script configuration (disabled by default)
 *   Cookies are picked up from `--ytdl-raw-options` or can be specified in the script configuration (disabled by default)
 *   A log file for youtube-dl download errors can be set in the in the script configuration (disabled by default)
+*   Choose between [youtube-dl](https://github.com/ytdl-org/youtube-dl/) or [yt-dlp](https://github.com/yt-dlp/yt-dlp). By default the script will try to auto-detect what is available and will prefer yt-dlp over youtube-dl. You can set the executable in the config to avoid the auto-detection.
 
 ## Credit
 - I pretty much copied the [mpv-youtube-quality](https://github.com/jgreco/mpv-youtube-quality) script
