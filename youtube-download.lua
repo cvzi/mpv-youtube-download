@@ -128,7 +128,7 @@ local function get_current_format()
     -- get the current youtube-dl format or the default value
     local ytdl_format = mp.get_property("options/ytdl-format")
     if not_empty(ytdl_format) then
-        return  ytdl_format
+        return ytdl_format
     end
     ytdl_format = mp.get_property("ytdl-format")
     if not_empty(ytdl_format) then
@@ -227,17 +227,14 @@ local function download(download_type)
     local ass1 =  mp.get_property("osd-ass-cc/1")
     local url = mp.get_property("path")
 
-    url = string.gsub(url, "ytdl://", "") -- Strip possible ytdl:// prefix.
-
-    if string.find(url, "//youtu.be/") == nil
-    and string.find(url, "//ww.youtu.be/") == nil
-    and string.find(url, "//youtube.com/") == nil
-    and string.find(url, "//www.youtube.com/") == nil
+    if url:find("ytdl://") ~= 1 and url:find("https?://") ~= 1
     then
         mp.osd_message("Not a youtube URL: " .. tostring(url), 10)
         is_downloading = false
         return
     end
+
+    url = string.gsub(url, "ytdl://", "") -- Strip possible ytdl:// prefix.
 
     local list_match = url:match("list=(%w+)")
     local download_archive = opts.download_archive
