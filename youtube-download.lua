@@ -175,6 +175,14 @@ if not not_empty(opts.youtube_dl_exe) then
     detect_executable()
 end
 
+if opts.filename:find("/") == nil and opts.filename:find("\\") == nil then
+  local cwd = utils.getcwd()
+  local win_programs = "C:\\Program Files"
+  if cwd:sub(1, #win_programs) == win_programs then
+     msg.warn("The mpv working directory ('" ..cwd .."') is probably not writable! Set 'filename' to a folder in the script config or run mpv in a different working directory.")
+  end
+end
+
 local DOWNLOAD = {
     VIDEO=1,
     AUDIO=2,
@@ -250,6 +258,14 @@ local function download(download_type)
         mp.osd_message("Video w/ subtitle download started", 2)
     else
         mp.osd_message("Video download started", 2)
+    end
+
+    if opts.filename:find("/") == nil and opts.filename:find("\\") == nil then
+      local cwd = utils.getcwd()
+      local win_programs = "C:\\Program Files"
+      if cwd:sub(1, #win_programs) == win_programs then
+         mp.osd_message("Working directory '" ..cwd .."' may not be writable!\nSet 'filename' in script config or change working directory", 10)
+      end
     end
 
     -- Compose command line arguments
