@@ -43,7 +43,7 @@ Add the following lines to the end of your `input.conf` (change the keys if they
 
 ```
 
-### Debugging errors:
+## Debugging errors:
 To get more information in case of an error you can make mpv print more data about the script:
 ```bash
 mpv --msg-level=youtube_download=trace "https://www.youtube.com/watch?v=AbC_DeFgHIj"
@@ -53,7 +53,7 @@ or on Windows:
 mpv.com --msg-level=youtube_download=trace "https://www.youtube.com/watch?v=AbC_DeFgHIj"
 ```
 
-### Features and default keyboard shortcuts:
+## Features and default keyboard shortcuts:
 
 *   CTRL + d : Download video
 *   CTRL + a : Download audio
