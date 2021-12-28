@@ -79,9 +79,21 @@ local opts = {
     -- Log file for download errors
     log_file = "",
 
-    -- Executable of youtube-dl to use, e.g. "youtube-dl", "yt-dlp" or path to the executable file
+    -- Executable of youtube-dl to use, e.g. "youtube-dl", "yt-dlp" or
+    -- path to the executable file
     -- Set to "" to auto-detect the executable
     youtube_dl_exe = "",
+
+    -- Use a config file, see youtube-dl --config-location, instead of
+    -- the usual options for this keyboard shortcut. This way you can
+    -- overwrite the predefined behaviour of the keyboard shortcut and
+    -- all of the above options with a custom download behaviour defined
+    -- in each config file.
+    -- Set to "" to retain the predefined behaviour
+    download_video_config_file = "",
+    download_audio_config_file = "",
+    download_subtitle_config_file = "",
+    download_video_embed_subtitle_config_file= "",
 }
 
 local function exec(args, capture_stdout, capture_stderr)
@@ -187,7 +199,8 @@ local DOWNLOAD = {
     VIDEO=1,
     AUDIO=2,
     SUBTITLE=3,
-    VIDEO_EMBED_SUBTITLE=4
+    VIDEO_EMBED_SUBTITLE=4,
+    CONFIG_FILE=5
 }
 local select_range_mode = 0
 local start_time_seconds = nil
@@ -212,7 +225,7 @@ local function disable_select_range()
 end
 
 
-local function download(download_type)
+local function download(download_type, config_file)
     local start_time = os.date("%c")
     if is_downloading then
         if process_id ~= nil and should_cancel then
@@ -250,7 +263,9 @@ local function download(download_type)
         download_archive = opts.download_archive:gsub("$PLAYLIST", list_match)
     end
 
-    if download_type == DOWNLOAD.AUDIO then
+    if download_type == DOWNLOAD.CONFIG_FILE then
+        mp.osd_message("Download started\n" .. ass0 .. "{\\fs8}--config-location:\n'" .. config_file .. "'" .. ass1, 2)
+    elseif download_type == DOWNLOAD.AUDIO then
         mp.osd_message("Audio download started", 2)
     elseif download_type == DOWNLOAD.SUBTITLE then
         mp.osd_message("Subtitle download started", 2)
@@ -275,7 +290,12 @@ local function download(download_type)
     local range_mode_subtitle_file_name = nil
     local start_time_offset = 0
 
-    if select_range_mode == 0 or (select_range_mode > 0 and (download_type == DOWNLOAD.AUDIO or download_type == DOWNLOAD.SUBTITLE)) then
+    if download_type == DOWNLOAD.CONFIG_FILE then
+        table.insert(command, opts.youtube_dl_exe)
+        table.insert(command, "--config-location")
+        table.insert(command, config_file)
+        table.insert(command, url)
+    elseif select_range_mode == 0 or (select_range_mode > 0 and (download_type == DOWNLOAD.AUDIO or download_type == DOWNLOAD.SUBTITLE)) then
         table.insert(command, opts.youtube_dl_exe)
         table.insert(command, "--no-overwrites")
         if opts.restrict_filenames then
@@ -628,13 +648,18 @@ local function download(download_type)
                 if filename ~= nil then
                     os.remove(filename .. '.part')
                 end
+            elseif download_type == DOWNLOAD.CONFIG_FILE and stderr:find("config") ~= nil then
+                local start_index = stderr:find("config")
+                local end_index = stderr:find ("\n", start_index, true)
+                local osd_text = ass0 .. "{\\fs12} " .. stderr:sub(start_index - 7, end_index) .. ass1
+                mp.osd_message("Config file problem:\n" .. osd_text, 10)
             else
                 mp.osd_message("download failed:\n" .. tostring(stderr), 10)
             end
             msg.error("URL: " .. tostring(url))
             msg.error("Return status code: " .. tostring(status))
-            msg.debug(tostring(stderr))
             msg.debug(tostring(stdout))
+            msg.warn(tostring(stderr))
             return
         end
 
@@ -810,19 +835,35 @@ local function select_range()
 end
 
 local function download_video()
-    return download(DOWNLOAD.VIDEO)
+    if not_empty(opts.download_video_config_file) then
+        return download(DOWNLOAD.CONFIG_FILE, opts.download_video_config_file)
+    else
+        return download(DOWNLOAD.VIDEO)
+    end
 end
 
 local function download_audio()
-    return download(DOWNLOAD.AUDIO)
+    if not_empty(opts.download_audio_config_file) then
+        return download(DOWNLOAD.CONFIG_FILE, opts.download_audio_config_file)
+    else
+        return download(DOWNLOAD.AUDIO)
+    end
 end
 
 local function download_subtitle()
-    return download(DOWNLOAD.SUBTITLE)
+    if not_empty(opts.download_subtitle_config_file) then
+        return download(DOWNLOAD.CONFIG_FILE, opts.download_subtitle_config_file)
+    else
+        return download(DOWNLOAD.SUBTITLE)
+    end
 end
 
 local function download_embed_subtitle()
-    return download(DOWNLOAD.VIDEO_EMBED_SUBTITLE)
+    if not_empty(opts.download_video_embed_subtitle_config_file) then
+        return download(DOWNLOAD.CONFIG_FILE, opts.download_video_embed_subtitle_config_file)
+    else
+        return download(DOWNLOAD.VIDEO_EMBED_SUBTITLE)
+    end
 end
 
 -- keybind
