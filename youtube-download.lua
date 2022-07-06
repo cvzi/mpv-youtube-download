@@ -571,7 +571,9 @@ local function download(download_type, config_file)
 
     -- Callback
     local function download_ended(success, ret, error)
+        process_id = nil
         if opts.open_new_terminal then
+            is_downloading = false
             -- Hide download indicator
             mp.set_osd_ass(0, 0, "")
             return
@@ -580,8 +582,6 @@ local function download(download_type, config_file)
         local stdout = ret.stdout
         local stderr = ret.stderr
         local status = ret.status
-
-        process_id = nil
 
         if status == 0 and range_mode_file_name ~= nil then
             mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔨")
