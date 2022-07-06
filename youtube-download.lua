@@ -94,6 +94,11 @@ local opts = {
     download_audio_config_file = "",
     download_subtitle_config_file = "",
     download_video_embed_subtitle_config_file= "",
+
+    -- Open a new "Windows Terminal" window/tab for download
+    -- This allows you to monitor the download progress
+    -- Currently only works on Windows with the new wt terminal
+    open_new_terminal = true
 }
 
 local function exec(args, capture_stdout, capture_stderr)
@@ -190,7 +195,8 @@ end
 if opts.filename:find("/") == nil and opts.filename:find("\\") == nil then
   local cwd = utils.getcwd()
   local win_programs = "C:\\Program Files"
-  if cwd:sub(1, #win_programs) == win_programs then
+  local win_win = "C:\\Windows"
+  if cwd:sub(1, #win_programs) == win_programs or cwd:sub(1, #win_win) == win_win then
      msg.warn("The mpv working directory ('" ..cwd .."') is probably not writable! Set 'filename' to a folder in the script config or run mpv in a different working directory.")
   end
 end
@@ -565,6 +571,12 @@ local function download(download_type, config_file)
 
     -- Callback
     local function download_ended(success, ret, error)
+        if opts.open_new_terminal then
+            -- Hide download indicator
+            mp.set_osd_ass(0, 0, "")
+            return
+        end
+
         local stdout = ret.stdout
         local stderr = ret.stderr
         local status = ret.status
@@ -725,6 +737,29 @@ local function download(download_type, config_file)
 
     -- Start download
     msg.debug("exec (async): " .. table.concat(command, " "))
+
+    if opts.open_new_terminal then
+        local cwd = utils.getcwd()
+        local win_programs = "C:\\Program Files"
+        local win_win = "C:\\Windows"
+        if cwd:sub(1, #win_programs) == win_programs or cwd:sub(1, #win_win) == win_win then
+           msg.debug("The mpv working directory ('" ..cwd .."') is probably not writable. Trying %USERPROFILE%...")
+           local user_profile = os.getenv("USERPROFILE")
+           if  user_profile ~= nil then
+                cwd = user_profile
+           else
+                msg.warn("open_new_terminal is enabled, but %USERPROFILE% is not defined")
+           end
+        end
+        mp.osd_message(table.concat(command, " "), 3)
+        table.insert(command, 1, "wt")
+        table.insert(command, 2, "new-tab")
+        table.insert(command, 3, "-d")
+        table.insert(command, 4, cwd)
+        table.insert(command, 5, "cmd")
+        table.insert(command, 6, "/K")
+    end
+
     process_id = exec_async(command, true, true, download_ended)
 
 end
