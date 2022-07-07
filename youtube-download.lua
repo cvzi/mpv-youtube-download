@@ -94,6 +94,14 @@ local opts = {
     download_audio_config_file = "",
     download_subtitle_config_file = "",
     download_video_embed_subtitle_config_file= "",
+
+    -- Open a new "Windows Terminal" window/tab for download
+    -- This allows you to monitor the download progress
+    -- Currently only works on Windows with the new wt terminal
+    -- If open_new_terminal_autoclose is true, then the terminal window
+    -- will close after the download, even if there were errors
+    open_new_terminal = false,
+    open_new_terminal_autoclose = false,
 }
 
 local function exec(args, capture_stdout, capture_stderr)
@@ -190,7 +198,8 @@ end
 if opts.filename:find("/") == nil and opts.filename:find("\\") == nil then
   local cwd = utils.getcwd()
   local win_programs = "C:\\Program Files"
-  if cwd:sub(1, #win_programs) == win_programs then
+  local win_win = "C:\\Windows"
+  if cwd:sub(1, #win_programs) == win_programs or cwd:sub(1, #win_win) == win_win then
      msg.warn("The mpv working directory ('" ..cwd .."') is probably not writable! Set 'filename' to a folder in the script config or run mpv in a different working directory.")
   end
 end
@@ -565,11 +574,17 @@ local function download(download_type, config_file)
 
     -- Callback
     local function download_ended(success, ret, error)
+        process_id = nil
+        if opts.open_new_terminal then
+            is_downloading = false
+            -- Hide download indicator
+            mp.set_osd_ass(0, 0, "")
+            return
+        end
+
         local stdout = ret.stdout
         local stderr = ret.stderr
         local status = ret.status
-
-        process_id = nil
 
         if status == 0 and range_mode_file_name ~= nil then
             mp.set_osd_ass(0, 0, "{\\an9}{\\fs12}⌛🔨")
@@ -725,6 +740,47 @@ local function download(download_type, config_file)
 
     -- Start download
     msg.debug("exec (async): " .. table.concat(command, " "))
+
+    if opts.open_new_terminal then
+        mp.osd_message(table.concat(command, " "), 3)
+
+        -- Check working directory is writable (in case the filename does not specify a directory)
+        local cwd = utils.getcwd()
+        local win_programs = "C:\\Program Files"
+        local win_win = "C:\\Windows"
+        if cwd:lower():sub(1, #win_programs) == win_programs:lower() or cwd:lower():sub(1, #win_win) == win_win:lower() then
+           msg.debug("The mpv working directory ('" ..cwd .."') is probably not writable. Trying %USERPROFILE%...")
+           local user_profile = os.getenv("USERPROFILE")
+           if  user_profile ~= nil then
+                cwd = user_profile
+           else
+                msg.warn("open_new_terminal is enabled, but %USERPROFILE% is not defined")
+                mp.osd_message("open_new_terminal is enabled, but %USERPROFILE% is not defined", 3)
+           end
+        end
+
+        -- Escape restricted characters on Windows
+        restricted = "&<>|"
+        for key, value in ipairs(command) do
+            command[key] = value:gsub("["..  restricted .. "]", "^%0")
+        end
+
+        -- Prepend command with wt.exe
+        table.insert(command, 1, "wt")
+        table.insert(command, 2, "-w")
+        table.insert(command, 3, "ytdlp")
+        table.insert(command, 4, "new-tab")
+        table.insert(command, 5, "-d")
+        table.insert(command, 6, cwd)
+        table.insert(command, 7, "cmd")
+        if opts.open_new_terminal_autoclose then
+            table.insert(command, 8, "/C")
+        else
+            table.insert(command, 8, "/K")
+        end
+        msg.debug("exec (async): " .. table.concat(command, " "))
+    end
+
     process_id = exec_async(command, true, true, download_ended)
 
 end
