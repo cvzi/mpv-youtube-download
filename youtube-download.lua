@@ -98,7 +98,10 @@ local opts = {
     -- Open a new "Windows Terminal" window/tab for download
     -- This allows you to monitor the download progress
     -- Currently only works on Windows with the new wt terminal
-    open_new_terminal = true
+    -- If open_new_terminal_autoclose is true, then the terminal window
+    -- will close after the download, even if there were errors
+    open_new_terminal = false,
+    open_new_terminal_autoclose = false,
 }
 
 local function exec(args, capture_stdout, capture_stderr)
@@ -739,25 +742,43 @@ local function download(download_type, config_file)
     msg.debug("exec (async): " .. table.concat(command, " "))
 
     if opts.open_new_terminal then
+        mp.osd_message(table.concat(command, " "), 3)
+
+        -- Check working directory is writable (in case the filename does not specify a directory)
         local cwd = utils.getcwd()
         local win_programs = "C:\\Program Files"
         local win_win = "C:\\Windows"
-        if cwd:sub(1, #win_programs) == win_programs or cwd:sub(1, #win_win) == win_win then
+        if cwd:lower():sub(1, #win_programs) == win_programs:lower() or cwd:lower():sub(1, #win_win) == win_win:lower() then
            msg.debug("The mpv working directory ('" ..cwd .."') is probably not writable. Trying %USERPROFILE%...")
            local user_profile = os.getenv("USERPROFILE")
            if  user_profile ~= nil then
                 cwd = user_profile
            else
                 msg.warn("open_new_terminal is enabled, but %USERPROFILE% is not defined")
+                mp.osd_message("open_new_terminal is enabled, but %USERPROFILE% is not defined", 3)
            end
         end
-        mp.osd_message(table.concat(command, " "), 3)
+
+        -- Escape restricted characters on Windows
+        restricted = "&<>|"
+        for key, value in ipairs(command) do
+            command[key] = value:gsub("["..  restricted .. "]", "^%0")
+        end
+
+        -- Prepend command with wt.exe
         table.insert(command, 1, "wt")
-        table.insert(command, 2, "new-tab")
-        table.insert(command, 3, "-d")
-        table.insert(command, 4, cwd)
-        table.insert(command, 5, "cmd")
-        table.insert(command, 6, "/K")
+        table.insert(command, 2, "-w")
+        table.insert(command, 3, "ytdlp")
+        table.insert(command, 4, "new-tab")
+        table.insert(command, 5, "-d")
+        table.insert(command, 6, cwd)
+        table.insert(command, 7, "cmd")
+        if opts.open_new_terminal_autoclose then
+            table.insert(command, 8, "/C")
+        else
+            table.insert(command, 8, "/K")
+        end
+        msg.debug("exec (async): " .. table.concat(command, " "))
     end
 
     process_id = exec_async(command, true, true, download_ended)
