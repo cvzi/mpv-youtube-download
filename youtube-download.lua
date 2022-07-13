@@ -59,13 +59,16 @@ local opts = {
     -- Or "C:/Users/Username/cookies.txt"
     cookies = "",
 
-    -- Filename or full path
-    -- Same as youtube-dl -o FILETEMPLATE
+    -- Set '/:dir%mpvconf%' to use mpv config directory to download
+    -- OR change to '/:dir%script%' for placing it in the same directory of script
+    -- OR change to '~~/ytdl/download' for sub-path of mpv portable_config directory
+    -- OR write any variable using '/:var', such as: '/:var%APPDATA%/mpv/ytdl/download' or '/:var%HOME%/mpv/ytdl/download'
+    -- OR specify the absolute path, such as: "C:\\Users\\UserName\\Downloads"
+    download_path = "/:dir%mpvconf%/ytdl/download",
+
+    -- Filename format to download file
     -- see https://github.com/ytdl-org/youtube-dl/blob/master/README.md#output-template
-    -- A relative path or a file name is relative to the path mpv was launched from
-    -- On Windows you need to use a double blackslash or a single fordwardslash
-    -- For example "C:\\Users\\Username\\Downloads\\%(title)s.%(ext)s"
-    -- Or "C:/Users/Username/Downloads/%(title)s.%(ext)s"
+    -- For example: "%(title)s.%(ext)s"
     filename = "%(title)s.%(ext)s",
 
     -- Subtitle language
@@ -195,13 +198,28 @@ if not not_empty(opts.youtube_dl_exe) then
     detect_executable()
 end
 
-if opts.filename:find("/") == nil and opts.filename:find("\\") == nil then
-  local cwd = utils.getcwd()
-  local win_programs = "C:\\Program Files"
-  local win_win = "C:\\Windows"
-  if cwd:sub(1, #win_programs) == win_programs or cwd:sub(1, #win_win) == win_win then
-     msg.warn("The mpv working directory ('" ..cwd .."') is probably not writable! Set 'filename' to a folder in the script config or run mpv in a different working directory.")
-  end
+if opts.download_path:match('^/:dir%%mpvconf%%') then
+    opts.download_path = opts.download_path:gsub('/:dir%%mpvconf%%', mp.find_config_file('.'))
+elseif opts.download_path:match('^/:dir%%script%%') then
+    opts.download_path = opts.download_path:gsub('/:dir%%script%%', mp.find_config_file('scripts'))
+elseif opts.download_path:match('^/:var%%(.*)%%') then
+    local os_variable = opts.download_path:match('/:var%%(.*)%%')
+    opts.download_path = opts.download_path:gsub('/:var%%(.*)%%', os.getenv(os_variable))
+elseif opts.download_path:match('^~~') then
+    opts.download_path = mp.command_native({ "expand-path", opts.download_path })
+end
+
+--create opts.download_path if it doesn't exist
+if utils.readdir(opts.download_path) == nil then
+    local is_windows = package.config:sub(1, 1) == "\\"
+    local windows_args = { 'powershell', '-NoProfile', '-Command', 'mkdir', opts.download_path }
+    local unix_args = { 'mkdir', opts.download_path }
+    local args = is_windows and windows_args or unix_args
+    local res = mp.command_native({name = "subprocess", capture_stdout = true, playback_only = false, args = args})
+    if res.status ~= 0 then
+        msg.error("Failed to create youtube-download save directory "..opts.download_path..". Error: "..(res.error or "unknown"))
+        return
+    end
 end
 
 local DOWNLOAD = {
@@ -284,13 +302,7 @@ local function download(download_type, config_file)
         mp.osd_message("Video download started", 2)
     end
 
-    if opts.filename:find("/") == nil and opts.filename:find("\\") == nil then
-      local cwd = utils.getcwd()
-      local win_programs = "C:\\Program Files"
-      if cwd:sub(1, #win_programs) == win_programs then
-         mp.osd_message("Working directory '" ..cwd .."' may not be writable!\nSet 'filename' in script config or change working directory", 10)
-      end
-    end
+    opts.filename = opts.download_path .. "/" .. opts.filename
 
     -- Compose command line arguments
     local command = {}
