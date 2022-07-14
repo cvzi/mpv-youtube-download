@@ -214,7 +214,7 @@ end
 if not_empty(opts.download_path) and utils.readdir(opts.download_path) == nil then
     local is_windows = package.config:sub(1, 1) == "\\"
     local windows_args = { 'powershell', '-NoProfile', '-Command', 'mkdir', opts.download_path }
-    local unix_args = { 'mkdir', opts.download_path }
+    local unix_args = { 'mkdir', '-p', opts.download_path }
     local args = is_windows and windows_args or unix_args
     local res = mp.command_native({name = "subprocess", capture_stdout = true, playback_only = false, args = args})
     if res.status ~= 0 then
