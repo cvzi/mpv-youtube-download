@@ -64,6 +64,7 @@ local opts = {
     -- OR change to '~~/ytdl/download' for sub-path of mpv portable_config directory
     -- OR write any variable using '/:var', such as: '/:var%APPDATA%/mpv/ytdl/download' or '/:var%HOME%/mpv/ytdl/download'
     -- OR specify the absolute path, such as: "C:\\Users\\UserName\\Downloads"
+    -- OR leave empty "" to use the current working directory
     download_path = "/:dir%mpvconf%/ytdl/download",
 
     -- Filename format to download file
@@ -210,7 +211,7 @@ elseif opts.download_path:match('^~~') then
 end
 
 --create opts.download_path if it doesn't exist
-if utils.readdir(opts.download_path) == nil then
+if not_empty(opts.download_path) and utils.readdir(opts.download_path) == nil then
     local is_windows = package.config:sub(1, 1) == "\\"
     local windows_args = { 'powershell', '-NoProfile', '-Command', 'mkdir', opts.download_path }
     local unix_args = { 'mkdir', opts.download_path }
@@ -302,7 +303,9 @@ local function download(download_type, config_file)
         mp.osd_message("Video download started", 2)
     end
 
-    opts.filename = opts.download_path .. "/" .. opts.filename
+    if not_empty(opts.download_path) then
+        opts.filename = opts.download_path .. "/" .. opts.filename
+    end
 
     -- Compose command line arguments
     local command = {}
