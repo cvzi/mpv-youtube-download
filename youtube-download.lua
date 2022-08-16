@@ -86,7 +86,7 @@ local opts = {
     -- Executable of youtube-dl to use, e.g. "youtube-dl", "yt-dlp" or
     -- path to the executable file
     -- Set to "" to auto-detect the executable
-    youtube_dl_exe = "",
+    youtube_dl_exe = "yt-dlp",
 
     -- Use a config file, see youtube-dl --config-location, instead of
     -- the usual options for this keyboard shortcut. This way you can
