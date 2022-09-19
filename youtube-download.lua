@@ -29,6 +29,9 @@ local opts = {
     -- insert a value between 0 (better) and 9 (worse) for VBR or a specific bitrate like 128K
     audio_quality = "0",
 
+    -- Embed the thumbnail on audio files
+    embed_thumbnail = false,
+
     -- Same as youtube-dl --format FORMAT
     -- see https://github.com/ytdl-org/youtube-dl/blob/master/README.md#format-selection
     -- set to "current" to download the same quality that is currently playing
@@ -361,6 +364,9 @@ local function download(download_type, config_file)
             if not_empty(opts.audio_quality) then
               table.insert(command, "--audio-quality")
               table.insert(command, opts.audio_quality)
+            end
+            if opts.embed_thumbnail then
+              table.insert(command, "--embed-thumbnail")
             end
             if  select_range_mode > 0 then
                 local start_time_str = tostring(start_time_seconds)
