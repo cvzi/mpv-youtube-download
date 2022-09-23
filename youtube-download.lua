@@ -32,6 +32,12 @@ local opts = {
     -- Embed the thumbnail on audio files
     embed_thumbnail = false,
 
+    -- Add metadata to audio files
+    audio_add_metadata = false,
+
+    -- Add metadata to video files
+    video_add_metadata = false,
+
     -- Same as youtube-dl --format FORMAT
     -- see https://github.com/ytdl-org/youtube-dl/blob/master/README.md#format-selection
     -- set to "current" to download the same quality that is currently playing
@@ -368,6 +374,9 @@ local function download(download_type, config_file)
             if opts.embed_thumbnail then
               table.insert(command, "--embed-thumbnail")
             end
+            if opts.audio_add_metadata then
+              table.insert(command, "--add-metadata")
+            end
             if  select_range_mode > 0 then
                 local start_time_str = tostring(start_time_seconds)
                 local end_time_str = tostring(end_time_seconds)
@@ -397,6 +406,9 @@ local function download(download_type, config_file)
             if not_empty(opts.recode_video) then
               table.insert(command, "--recode-video")
               table.insert(command, opts.recode_video)
+            end
+            if opts.video_add_metadata then
+              table.insert(command, "--add-metadata")
             end
         end
         if not_empty(opts.cookies) then
