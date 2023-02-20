@@ -23,6 +23,26 @@ The location of the .conf files on Windows is `%APPDATA%\mpv\script-opts`
 On windows, you need to [add the directory of the ffmpeg.exe to your machine's %PATH](https://stackoverflow.com/a/41895179/10367381)
 or put the ffmpeg.exe in the same directory as the youtube-dl.exe/yt-dlp.
 
+### [uosc](https://github.com/tomasklaen/uosc) menu integration
+
+You need to add one of the following lines to your `input.conf`. If you use the line starting with `#` it just creates an entry
+in the uosc menu. If you use the second line, it also creates a keyboard shortcut to open the menu.
+Replace `d` with the key of your choice:
+
+```
+#           script-message-to youtube_download menu     #! Download
+OR
+d           script-message-to youtube_download menu     #! Download
+```
+
+If you want it to appear in a submenu, replace `Download` with e.g. `Utils > Download`
+
+
+Note: If you're using the default menu of uosc and you don't have the uosc menu defined in `input.conf`, you first need to create
+a menu configuration. You can find an example at https://github.com/tomasklaen/uosc#examples
+
+![screenshot of uosc](screenshot.gif)
+
 ### mpv.net:
 The script folder for mpv.net is:
 `%APPDATA%\mpv.net\scripts`
