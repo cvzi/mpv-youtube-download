@@ -25,8 +25,9 @@ or put the ffmpeg.exe in the same directory as the youtube-dl.exe/yt-dlp.
 
 ### [uosc](https://github.com/tomasklaen/uosc) menu integration
 
-You need to add one of the following lines to your `input.conf`. If you use the line starting with `#` it just creates an entry
-in the uosc menu. If you use the second line, it also creates a keyboard shortcut to open the menu.
+If you want to add the download menu to uosc, you need to add one of the following lines to your `input.conf`.
+If you use the line starting with `#` it just creates an entry in the uosc menu.
+If you use the second line, it also creates a keyboard shortcut to open the menu.
 Replace `d` with the key of your choice:
 
 ```
