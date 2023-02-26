@@ -979,7 +979,7 @@ function create_menu_data()
     end
 
     local url = mp.get_property("path")
-    local not_youtube = url:find("ytdl://") ~= 1 and url:find("https?://") ~= 1
+    local not_youtube = url == nil or (url:find("ytdl://") ~= 1 and url:find("https?://") ~= 1)
 
     local items = {
       {
