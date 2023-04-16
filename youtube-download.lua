@@ -94,6 +94,10 @@ local opts = {
     -- Same as youtube-dl --sub-format best
     sub_format = "best",
 
+    -- Download auto-generated subtitles
+    -- Same as youtube-dl --write-auto-subs / --no-write-auto-subs
+    sub_auto_generated = false,
+
     -- Log file for download errors
     log_file = "",
 
@@ -269,7 +273,7 @@ end
 
 
 local function download(download_type, config_file, overwrite_opts)
-    video_format = opts.video_format
+    local video_format = opts.video_format
     if overwrite_opts ~= nil then
         if overwrite_opts.video_format ~= nil  then
             video_format = overwrite_opts.video_format
@@ -370,6 +374,11 @@ local function download(download_type, config_file, overwrite_opts)
                 table.insert(command, "--sub-format")
                 table.insert(command, opts.sub_format)
             end
+            if opts.sub_auto_generated then
+                table.insert(command, "--write-auto-subs")
+            else
+                table.insert(command, "--no-write-auto-subs")
+            end
             if select_range_mode > 0 then
                 mp.osd_message("Range mode is not available for subtitle-only download", 10)
                 is_downloading = false
@@ -401,12 +410,17 @@ local function download(download_type, config_file, overwrite_opts)
             end
         else --DOWNLOAD.VIDEO or DOWNLOAD.VIDEO_EMBED_SUBTITLE
             if download_type == DOWNLOAD.VIDEO_EMBED_SUBTITLE then
-                table.insert(command, "--all-subs")
-                table.insert(command, "--write-sub")
                 table.insert(command, "--embed-subs")
+                table.insert(command, "--sub-lang")
+                table.insert(command, opts.sub_lang)
                 if not_empty(opts.sub_format) then
                     table.insert(command, "--sub-format")
                     table.insert(command, opts.sub_format)
+                end
+                if opts.sub_auto_generated then
+                    table.insert(command, "--write-auto-subs")
+                else
+                    table.insert(command, "--no-write-auto-subs")
                 end
             end
             if not_empty(video_format) then
@@ -564,6 +578,11 @@ local function download(download_type, config_file, overwrite_opts)
             if not_empty(opts.sub_format) then
                 table.insert(command, "--sub-format")
                 table.insert(command, opts.sub_format)
+            end
+            if opts.sub_auto_generated then
+                table.insert(command, "--write-auto-subs")
+            else
+                table.insert(command, "--no-write-auto-subs")
             end
             local randomName = "tmp_" .. tostring(math.random())
             table.insert(command, "-o")
@@ -739,27 +758,27 @@ local function download(download_type, config_file, overwrite_opts)
         local osd_time = 5
         -- Find filename or directory
         if filename then
-            local filepath
+            local filepath_display
             local basepath
             if filename:find("/") == nil and filename:find("\\") == nil then
               basepath = utils.getcwd()
-              filepath = path_join(utils.getcwd(), filename)
+              filepath_display = path_join(utils.getcwd(), filename)
             else
               basepath = ""
-              filepath = filename
+              filepath_display = filename
             end
 
-            if filepath:len() < 100 then
-                osd_text = osd_text .. ass0 .. "{\\fs12} " .. filepath .. " {\\fs20}" .. ass1
+            if filepath_display:len() < 100 then
+                osd_text = osd_text .. ass0 .. "{\\fs12} " .. filepath_display .. " {\\fs20}" .. ass1
             elseif basepath == "" then
-                osd_text = osd_text .. ass0 .. "{\\fs8} " .. filepath .. " {\\fs20}" .. ass1
+                osd_text = osd_text .. ass0 .. "{\\fs8} " .. filepath_display .. " {\\fs20}" .. ass1
             else
                 osd_text = osd_text .. ass0 .. "{\\fs11} " .. basepath .. "\n" .. filename .. " {\\fs20}" ..  ass1
             end
             if wrote_error_log then
                 -- Write filename and end time to log file
                 local file = io.open (opts.log_file , "a+")
-                file:write("[" .. filepath .. "]\n")
+                file:write("[" .. filepath_display .. "]\n")
                 file:write(os.date("[end %c]\n"))
                 file:close()
             end
@@ -812,7 +831,7 @@ local function download(download_type, config_file, overwrite_opts)
         end
 
         -- Escape restricted characters on Windows
-        restricted = "&<>|"
+        local restricted = "&<>|"
         for key, value in ipairs(command) do
             command[key] = value:gsub("["..  restricted .. "]", "^%0")
         end
@@ -943,11 +962,11 @@ local function select_range()
 end
 
 
-function menu_command(str)
+local function menu_command(str)
     return string.format('script-message-to %s %s', script_name, str)
 end
 
-function create_menu_data()
+local function create_menu_data()
     -- uosc menu
 
     local current_format = get_current_format()
@@ -958,11 +977,11 @@ function create_menu_data()
     end
 
     if not_empty(opts.remux_video) then
-        video_format = video_format .. "/" .. tostring(remux_video)
+        video_format = video_format .. "/" .. tostring(opts.remux_video)
     end
 
     if not_empty(opts.recode_video) then
-        video_format = video_format .. "/" .. tostring(recode_video)
+        video_format = video_format .. "/" .. tostring(opts.recode_video)
     end
 
     local audio_format = ""
