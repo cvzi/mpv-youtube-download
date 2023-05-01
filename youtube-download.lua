@@ -124,6 +124,12 @@ local opts = {
     -- will close after the download, even if there were errors
     open_new_terminal = false,
     open_new_terminal_autoclose = false,
+
+    -- Used to localize uosc-submenu content
+    -- Must use json format, example for Chinese: [{"Download": "下载","Audio": "音频"}]
+    locale_content = [[
+        []
+    ]],
 }
 
 local function exec(args, capture_stdout, capture_stderr)
@@ -182,6 +188,19 @@ end
 
 --Read configuration file
 (require 'mp.options').read_options(opts, "youtube-download")
+
+--Read text string
+local locale_content = utils.parse_json(opts.locale_content)
+
+local function locale(str)
+    if str and locale_content then
+        for k, v in ipairs(locale_content) do
+            return v[str] or str
+        end
+    else
+        return str
+    end
+end
 
 --Read command line arguments
 local ytdl_raw_options = mp.get_property("ytdl-raw-options")
@@ -1002,41 +1021,41 @@ local function create_menu_data()
 
     local items = {
       {
-        title = 'Audio',
+        title = locale('Audio'),
         hint = tostring(audio_format),
         icon = 'audiotrack',
         value = menu_command('audio_default_quality'),
         keep_open = false
       },
       {
-        title = 'Video (Current quality)',
+        title = locale('Video (Current quality)'),
         hint = tostring(current_format),
         icon = 'play_circle_filled',
         value = menu_command('video_current_quality'),
         keep_open = false
       },
       {
-        title = 'Video (Default quality)',
+        title = locale('Video (Default quality)'),
         hint = tostring(video_format),
         icon = 'download',
         value = menu_command('video_default_quality'),
         keep_open = false
       },
       {
-        title = 'Video with subtitles',
+        title = locale('Video with subtitles'),
         icon = 'hearing_disabled',
         value = menu_command('embed_subtitle_default_quality'),
         keep_open = false
       },
       {
-        title = 'Subtitles',
+        title = locale('Subtitles'),
         hint = tostring(sub_format),
         icon = 'subtitles',
         value = menu_command('subtitle'),
         keep_open = false
       },
       {
-        title = 'Select range',
+        title = locale('Select range'),
         icon = 'content_cut',
         value = menu_command('cut'),
         keep_open = false
@@ -1045,7 +1064,7 @@ local function create_menu_data()
 
     if not_empty(opts.download_video_config_file) then
         table.insert(items, {
-            title = 'Video (Config file)',
+            title = locale('Video (Config file)'),
             icon = 'build',
             value = menu_command('video_config_file'),
             keep_open = false
@@ -1053,7 +1072,7 @@ local function create_menu_data()
     end
     if not_empty(opts.download_audio_config_file) then
         table.insert(items, {
-            title = 'Audio (Config file)',
+            title = locale('Audio (Config file)'),
             icon = 'build',
             value = menu_command('audio_config_file'),
             keep_open = false
@@ -1061,7 +1080,7 @@ local function create_menu_data()
     end
     if not_empty(opts.download_subtitle_config_file) then
         table.insert(items, {
-            title = 'Subtitle (Config file)',
+            title = locale('Subtitle (Config file)'),
             icon = 'build',
             value = menu_command('subtitle_config_file'),
             keep_open = false
@@ -1069,7 +1088,7 @@ local function create_menu_data()
     end
     if not_empty(opts.download_video_embed_subtitle_config_file) then
         table.insert(items, {
-            title = 'Video with subtitles (Config file)',
+            title = locale('Video with subtitles (Config file)'),
             icon = 'build',
             value = menu_command('video_embed_subtitle_config_file'),
             keep_open = false
@@ -1077,7 +1096,7 @@ local function create_menu_data()
     end
     if not_youtube then
         table.insert(items, 1, {
-            title = 'Current file is not a youtube video',
+            title = locale('Current file is not a youtube video'),
             icon = 'warning',
             value = menu_command(''),
             bold = true,
@@ -1088,7 +1107,7 @@ local function create_menu_data()
 
     return {
       type = 'yt_download_menu',
-      title = 'Download',
+      title = locale('Download'),
       keep_open = true,
       items = items
     }
