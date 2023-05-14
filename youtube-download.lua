@@ -131,7 +131,7 @@ local opts = {
     -- downloaded, then all the downloads are scheduled immediately.
     -- Before each download is started, the script waits the given
     -- timeout in seconds
-    open_new_terminal = true,
+    open_new_terminal = false,
     open_new_terminal_autoclose = false,
     open_new_terminal_timeout = 3,
 
