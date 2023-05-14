@@ -46,7 +46,7 @@ a menu configuration. You can find an example at https://github.com/tomasklaen/u
 
 If you want uosc menu entries in your language, you can change the `locale_content`-option in `youtube-download.conf`. For example for  Chinese (Simplified) localization:
 ```
-locale_content=[{"Download": "下载","Audio": "音频","Subtitles": "字幕","Select range": "选择范围","Video (Current quality)": "视频（当前质量）","Video (Default quality)": "视频（默认质量）","Video with subtitles": "视频和字幕","Current file is not a youtube video": "当前文件不受支持","Video (Config file)": "视频（使用配置文件）","Audio (Config file)": "音频（使用配置文件）","Subtitle (Config file)": "字幕（使用配置文件）","Video with subtitles (Config file)": "视频和字幕（使用配置文件）"}]
+locale_content=[{"Download": "下载","Audio": "音频","Subtitles": "字幕","Select range": "选择范围","Video (Current quality)": "视频（当前质量）","Video (Default quality)": "视频（默认质量）","Video with subtitles": "视频和字幕","Current file is not a youtube video": "当前文件不受支持","Video (Config file)": "视频（使用配置文件）","Audio (Config file)": "音频（使用配置文件）","Subtitle (Config file)": "字幕（使用配置文件）","Video with subtitles (Config file)": "视频和字幕（使用配置文件）","Download whole mpv playlist": "下载整个播放列表"}]
 ```
 
 ### mpv.net:
