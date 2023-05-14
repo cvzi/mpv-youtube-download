@@ -127,8 +127,13 @@ local opts = {
     -- Currently only works on Windows with the new wt terminal
     -- If open_new_terminal_autoclose is true, then the terminal window
     -- will close after the download, even if there were errors
-    open_new_terminal = false,
+    -- If mpv_playlist is true and the whole mpv playlist should be
+    -- downloaded, then all the downloads are scheduled immediately.
+    -- Before each download is started, the script waits the given
+    -- timeout in seconds
+    open_new_terminal = true,
     open_new_terminal_autoclose = false,
+    open_new_terminal_timeout = 3,
 
     -- Used to localize uosc-submenu content
     -- Must use json format, example for Chinese: [{"Download": "下载","Audio": "音频"}]
@@ -731,11 +736,40 @@ local function download(download_type, config_file, overwrite_opts)
             mpv_playlist_status[url] = true
         end
 
+        local playlist_finished = -1
+        if mpv_playlist_status ~= nil then
+            local to_do = false
+            for _, value in pairs(mpv_playlist_status) do
+                if not value then
+                    to_do = true
+                    break
+                end
+            end
+            if not to_do then
+                playlist_finished = table_size(mpv_playlist_status)
+                mpv_playlist_status = nil
+            end
+        end
+
         process_id = nil
         if opts.open_new_terminal then
             is_downloading = false
             -- Hide download indicator
             mp.set_osd_ass(0, 0, "")
+
+            -- Start next download if downloading whole mpv playlist
+            if playlist_finished ~= -1 then
+                mp.osd_message("Started last download of mpv playlist (".. tostring(playlist_finished) .. " entries)", 5)
+            elseif mpv_playlist_status ~= nil then
+                -- Wait a short time starting the next download
+                -- otherwise wt.exe will stop the previous command and not open a new tab
+                local n = opts.open_new_terminal_timeout
+                if n == nil or n < 1 then
+                    n = 1
+                end
+                exec({"ping", "-n", tostring(n), "localhost"}, false, false)
+                download(download_type, config_file, overwrite_opts)
+            end
             return
         end
 
@@ -812,21 +846,6 @@ local function download(download_type, config_file, overwrite_opts)
             end
         elseif not_empty(range_mode_file_name) then
             filename = range_mode_file_name
-        end
-
-        local playlist_finished = -1
-        if mpv_playlist_status ~= nil then
-            local to_do = false
-            for _, value in pairs(mpv_playlist_status) do
-                if not value then
-                    to_do = true
-                    break
-                end
-            end
-            if not to_do then
-                playlist_finished = table_size(mpv_playlist_status)
-                mpv_playlist_status = nil
-            end
         end
 
         if (status ~= 0) then
