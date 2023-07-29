@@ -95,7 +95,7 @@ mpv.com --msg-level=youtube_download=trace "https://www.youtube.com/watch?v=AbC_
 *   Cookies are picked up from `--ytdl-raw-options` or can be specified in the script configuration (disabled by default)
 *   A log file for youtube-dl download errors can be set in the in the script configuration (disabled by default)
 *   Choose between [youtube-dl](https://github.com/ytdl-org/youtube-dl/) or [yt-dlp](https://github.com/yt-dlp/yt-dlp). By default the script will try to auto-detect what is available and will prefer yt-dlp over youtube-dl. You can set the executable in the config to avoid the auto-detection.
-*   (Windows only) Donwload command can open a new terminal to monitor the download progress
+*   Download command can open a new terminal to monitor the download progress
 
 ## Credit
 - I pretty much copied the [mpv-youtube-quality](https://github.com/jgreco/mpv-youtube-quality) script
