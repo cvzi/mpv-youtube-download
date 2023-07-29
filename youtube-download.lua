@@ -134,7 +134,7 @@ local opts = {
     -- Use "$cwd" as a placeholder for the working directory
     -- Use "$cmd" as a placeholder for the download command
     open_new_terminal_command = [[
-        ["xfce4-terminal", "--tab", "-H", "-x", "$cmd"]
+        ["wt", "-w", "ytdlp", "new-tab", "-d", "$cwd", "cmd", "/K", "$cmd"]
     ]],
 
     -- Used to localize uosc-submenu content
