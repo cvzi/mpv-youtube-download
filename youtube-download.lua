@@ -128,7 +128,7 @@ local opts = {
     -- downloaded, then all the downloads are scheduled immediately.
     -- Before each download is started, the script waits the given
     -- timeout in seconds
-    open_new_terminal = true,
+    open_new_terminal = false,
     open_new_terminal_timeout = 3,
     -- Set the command that opens a new terminal (JSON array)
     -- Use "$cwd" as a placeholder for the working directory
@@ -164,13 +164,14 @@ local function exec(args, capture_stdout, capture_stderr)
     return ret.status, ret.stdout, ret.stderr, ret
 end
 
-local function exec_async(args, capture_stdout, capture_stderr, callback)
+local function exec_async(args, capture_stdout, capture_stderr, detach, callback)
     return mp.command_native_async({
         name = "subprocess",
         playback_only = false,
         capture_stdout = capture_stdout,
         capture_stderr = capture_stderr,
         args = args,
+        detach = detach,
     }, callback)
 end
 
@@ -247,7 +248,7 @@ local function detect_executable()
     opts.youtube_dl_exe = table.remove(executables, 1)
     if opts.youtube_dl_exe ~= nil then
         msg.debug("Trying executable '" .. opts.youtube_dl_exe .. "' ...")
-        exec_async({opts.youtube_dl_exe, "--version"}, false, false, detect_executable_callback)
+        exec_async({opts.youtube_dl_exe, "--version"}, false, false, false, detect_executable_callback)
     else
         msg.error("No working executable found, using fallback 'youtube-dl'")
         opts.youtube_dl_exe = "youtube-dl"
@@ -996,7 +997,13 @@ local function download(download_type, config_file, overwrite_opts)
         msg.debug("exec (async): " .. table.concat(command, " "))
     end
 
-    process_id = exec_async(command, true, true, download_ended)
+    process_id = exec_async(
+        command,
+        not opts.open_new_terminal,
+        not opts.open_new_terminal,
+        opts.open_new_terminal,
+        download_ended
+    )
 
 end
 
