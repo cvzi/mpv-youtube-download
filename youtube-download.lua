@@ -130,9 +130,10 @@ local opts = {
     -- timeout in seconds
     open_new_terminal = true,
     open_new_terminal_timeout = 3,
-    -- Set the command that opens a new terminal
+    -- Set the command that opens a new terminal (JSON array)
     -- Use "$cwd" as a placeholder for the working directory
     -- Use "$cmd" as a placeholder for the download command
+    -- See .conf file for Windows and xfce examples.
     open_new_terminal_command = [[
         ["wt", "-w", "ytdlp", "new-tab", "-d", "$cwd", "cmd", "/K", "$cmd"]
     ]],
