@@ -1096,10 +1096,10 @@ local function select_range()
     else
         select_range_mode = 1
         -- Add keybinds for arrow keys
-        mp.add_key_binding("up", "select-range-set-up", select_range_set_end)
-        mp.add_key_binding("down", "select-range-set-down", select_range_set_start)
-        mp.add_key_binding("left", "select-range-set-left", select_range_set_left)
-        mp.add_key_binding("right", "select-range-set-right", select_range_set_right)
+        mp.add_forced_key_binding("up", "select-range-set-up", select_range_set_end)
+        mp.add_forced_key_binding("down", "select-range-set-down", select_range_set_start)
+        mp.add_forced_key_binding("left", "select-range-set-left", select_range_set_left)
+        mp.add_forced_key_binding("right", "select-range-set-right", select_range_set_right)
 
         -- Defaults
         if start_time_seconds == nil then
